@@ -1595,7 +1595,7 @@ use strict;
 use warnings;
 
 $0 = 'shelldap';
-my $VERSION = '0.1';
+my $VERSION = '0.2';
 
 use Getopt::Long;
 use YAML::Syck;
