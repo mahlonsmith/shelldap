@@ -39,7 +39,7 @@ tasks quickly and with minimal effort.
 
 =head1 SYNPOSIS
 
- shelldap --server example.net --basedn dc=your,o=company [--tls] [--binddn ...] [--help]
+ shelldap --server example.net [--help]
 
 =head1 FEATURES
 
@@ -74,6 +74,9 @@ Example:
     bindpass: xxxxxxxxx
     basedn: dc=your,o=company
     tls: yes
+    tls_cacert: /etc/ssl/certs/cacert.pem
+    tls_cert:   ~/.ssl/client.cert.pem 
+    tls_key:    ~/.ssl/private/client.key.pem
 
 =over 4
 
@@ -114,6 +117,25 @@ try and ask the server for a sane default.
 
 Enables TLS over what would normally be an insecure connection.
 Requires server side support.
+
+=item B<tls_cacert>
+
+Specify CA Certificate to trust.
+
+    --tls_cacert /etc/ssl/certs/cacert.pem
+
+=item B<tls_cert>
+
+The TLS client certificate.
+
+    --tls_cert ~/.ssl/client.cert.pem
+
+=item B<tls_key>
+
+The TLS client key.  Not specifying a key will connect via TLS without
+key verification.
+
+    --tls_key ~/.ssl/private/client.key.pem
 
 =back
 
@@ -434,7 +456,28 @@ sub ldap
 	# make connection
 	my $ldap = Net::LDAP->new( $conf->{'server'} )
 		or die "Unable to connect to LDAP server '$conf->{'server'}': $!\n";
-	$ldap->start_tls( verify => 'none' ) if $conf->{'tls'};
+
+	# secure connection options
+	if ( $conf->{'tls'} ) {
+		if ( $conf->{'tls_key'} ) {
+			$ldap->start_tls( 
+				verify     => 'require',
+				cafile     => $conf->{'tls_cacert'},
+				clientcert => $conf->{'tls_cert'},
+				clientkey  => $conf->{'tls_key'},
+				keydecrypt => sub {
+					print "Key Passphrase: "; 
+					Term::ReadKey::ReadMode 2;
+					chomp(my $secret = <STDIN>);
+					Term::ReadKey::ReadMode 0;
+					print "\n";
+					return $secret;
+				});
+		}
+		else {
+			$ldap->start_tls( verify => 'none' );
+		}
+	}
 
 	# bind
 	my $rv;
@@ -794,9 +837,9 @@ sub comp_create
 		edit   => 'vi',
 		delete => 'rm',
 		copy   => 'cp',
-		cat	=> 'read',
+		cat    => 'read',
 		move   => 'mv',
-		cd	 => undef,
+		cd     => undef,
 		passwd => undef
 	);
 
@@ -804,7 +847,7 @@ sub comp_create
 	foreach ( %cmd_map ) {
 		next unless $_;
 		my $sub = "comp_$_";
-		*$sub = \&autocomplete_cwd;
+		*$sub   = \&autocomplete_cwd;
 	}
 	*comp_touch  = \&comp_create;
 	*comp_export = \&comp_setenv;
@@ -1486,7 +1529,7 @@ sub run_move
 
 	my $rv = $self->ldap()->moddn(
 		$s_dn,
-		newrdn	   => $d_dn,
+		newrdn	     => $d_dn,
 		deleteoldrdn => 1,
 		newsuperior  => $new_dn
 	);
@@ -1614,6 +1657,9 @@ Getopt::Long::GetOptions(
 	'basedn=s',
 	'cacheage=i',
 	'timeout=i',
+	'tls_cacert=s',
+	'tls_cert=s',
+	'tls_key=s',
 	'tls', 'debug',
 	 help => sub {
 		Pod::Usage::pod2usage(
@@ -1660,7 +1706,7 @@ sub load_config
 	close YAML;
 
 	eval { $conf = YAML::Syck::Load( $data ) };
-	die "Invalid YAML in ~/.shelldap.rc\n" if $@;
+	die "Invalid YAML in $confpath\n" if $@;
 
 	return $conf;
 }
