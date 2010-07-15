@@ -1402,8 +1402,12 @@ sub run_list
 		$long	= $flags =~ /l/;
 	}
 
-	my $s = $self->search({ scope => $recurse ? 'sub' : 'one',
-							vals  => $long, filter => $filter });
+	my $s = $self->search({
+		scope  => $recurse ? 'sub' : 'one',
+		vals   => 1,
+		filter => $filter,
+		attrs  => [ '*', 'hasSubordinates' ]
+	});
 	if ( $s->{'code'} ) {
 		print "$s->{'message'}\n";
 		return;
@@ -1419,7 +1423,7 @@ sub run_list
 		  || {
 			posixAccount => 'gecos',
 			posixGroup   => 'gidNumber',
-			ipHost	   => 'ipHostNumber',
+			ipHost	     => 'ipHostNumber',
 		  }
 	  };
 
@@ -1429,6 +1433,13 @@ sub run_list
 	my $dn;
 	foreach my $e ( sort { $a->dn() cmp $b->dn() } @{ $s->{'entries'} } ) {
 		$dn = $e->dn();
+
+		# if this entry is a container for other entries, append a
+		# trailing slash.
+		if ( $e->get_value('hasSubordinates') eq 'TRUE' ) {
+			$dn .= '/';
+		}
+
 		my $rdn = $dn;
 		$rdn =~ s/,$base//i;
 
