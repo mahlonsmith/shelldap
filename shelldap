@@ -867,6 +867,21 @@ sub comp_create
 	}
 }
 
+sub unwrap {
+	my $array = shift;
+
+	my $iter = 1;
+	while ($iter < $#$array) {
+		if (@$array[$iter] =~ m/^\W/) {
+			@$array[$iter - 1] =~ s/\n$//;
+			@$array[$iter] =~ s/^\W//;
+			splice(@$array, $iter - 1, 2, @$array[$iter - 1] . @$array[$iter]);
+		} else {
+			$iter++;
+		}
+	}
+}
+
 ###############################################################
 #
 # SHELL METHODS
@@ -1233,12 +1248,14 @@ sub run_edit
 
 	my $parse = sub {
 		my $line = shift || $_;
-		return unless $line =~ /^\w/; # ignore multiline
 		return if $line	 =~ /^\#/; # ignore comments
 		my ( $attr, $val ) = ( $1, $2 ) if $line =~ /^(.+?): (.*)$/;
 		return if index($attr, ':') != -1;  # ignore base64
 		return ( $attr, $val );
 	};
+
+	unwrap(\@orig_ldif);
+	unwrap(\@new_ldif);
 
 	my $diff = Algorithm::Diff->new( \@orig_ldif, \@new_ldif );
 	HUNK:
@@ -1250,7 +1267,6 @@ sub run_edit
 		# total deletions
 		if ( $diff_bit == 1 ) {
 			foreach ( $diff->Items(1) ) {
-				next unless /\w+/;
 				$self->debug("DELETE: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
 				$e->delete( $attr => [ $val ] );
@@ -1260,7 +1276,6 @@ sub run_edit
 		# new insertions
 		if ( $diff_bit == 2 ) {
 			foreach ( $diff->Items(2) ) {
-				next unless /\w+/;
 				$self->debug("INSERT: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
 				$e->add( $attr => $val );
@@ -1268,10 +1283,8 @@ sub run_edit
 		}
 
 		# replacements
-		# these are trickier with multivalue lines
 		if ( $diff_bit == 3 ) {
 			foreach ( $diff->Items(2) ) {
-				next unless /\w+/;
 				$self->debug("MODIFY: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
 
