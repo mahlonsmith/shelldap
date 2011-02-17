@@ -1,16 +1,18 @@
 #!/usr/bin/env perl
 # vim: set nosta noet ts=4 sw=4:
 #
-# Copyright (c) 2006, Mahlon E. Smith <mahlon@martini.nu>
+# Copyright (c) 2006-2011, Mahlon E. Smith <mahlon@martini.nu>
 # All rights reserved.
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
 #     * Redistributions of source code must retain the above copyright
 #       notice, this list of conditions and the following disclaimer.
+#
 #     * Redistributions in binary form must reproduce the above copyright
 #       notice, this list of conditions and the following disclaimer in the
 #       documentation and/or other materials provided with the distribution.
+#
 #     * Neither the name of Mahlon E. Smith nor the names of his
 #       contributors may be used to endorse or promote products derived
 #       from this software without specific prior written permission.
@@ -345,13 +347,8 @@ weird, as both should probably work.
 
 =head1 BUGS / LIMITATIONS
 
-There is currently no attribute multiline support - attribute values
-that span over one line will be ignored if modified.  (Thankfully, they
-are generally rare.)
-
-There is no support for editing binary data.  This is actually related
-to the lack of multiline support - if you just base64 encode data and
-paste it in, it will be ignored for the same reasons.
+There is no support for editing binary data.  If you need to edit base64
+stuff, just feed it to the regular ldapmodify/ldapadd/etc tools.
 
 =head1 AUTHOR
 
@@ -867,20 +864,26 @@ sub comp_create
 	}
 }
 
+
+# Given an $arrayref, remove LDIF continuation wrapping,
+# effectively making each entry a single line.
+# 
 sub unwrap {
 	my $array = shift;
 
-	my $iter = 1;
-	while ($iter < $#$array) {
-		if (@$array[$iter] =~ m/^\W/) {
-			@$array[$iter - 1] =~ s/\n$//;
-			@$array[$iter] =~ s/^\W//;
-			splice(@$array, $iter - 1, 2, @$array[$iter - 1] . @$array[$iter]);
-		} else {
-			$iter++;
+	my $i = 1;
+	while ( $i < scalar(@$array) ) {
+		if ( $array->[$i] =~ /^\s/ ) {
+			$array->[ $i - 1 ] =~ s/\n$//;
+			$array->[ $i ] =~ s/^\s//;
+			splice( @$array, $i - 1, 2, $array->[$i - 1] . $array->[$i] );
+		}
+		else {
+			$i++;
 		}
 	}
 }
+
 
 ###############################################################
 #
@@ -1158,11 +1161,11 @@ sub run_delete
 		print "No dn specified.\n";
 		return;
 	}
-        my $filter;
-        unless ( $DNs[0] eq '*' ) {
-            $filter = $self->make_filter( \@DNs ) or return;
-        }
 
+	my $filter;
+	unless ( $DNs[0] eq '*' ) {
+		$filter = $self->make_filter( \@DNs ) or return;
+	}
 
 	my $s = $self->search({ scope => 'one', filter => $filter });
 	if ( $s->{'code'} ) {
@@ -1212,9 +1215,8 @@ sub run_edit
 	$ldif->done();  # force sync
 
 	# load it into an array for potential comparison
-	my @orig_ldif;
 	open LDIF, "$self->{'ldif_fname'}" or return;
-	@orig_ldif = <LDIF>;
+	my @orig_ldif = <LDIF>;
 	close LDIF;
 
 	# checksum it, then open it in an editor
@@ -1239,9 +1241,8 @@ sub run_edit
 	}
 
 	# load changes into a new array for comparison
-	my @new_ldif;
 	open LDIF, "$self->{'ldif_fname'}" or return;
-	@new_ldif = <LDIF>;
+	my @new_ldif = <LDIF>;
 	close LDIF;
 
 	$e->changetype('modify');
@@ -1250,12 +1251,13 @@ sub run_edit
 		my $line = shift || $_;
 		return if $line	 =~ /^\#/; # ignore comments
 		my ( $attr, $val ) = ( $1, $2 ) if $line =~ /^(.+?): (.*)$/;
+		return unless $attr;
 		return if index($attr, ':') != -1;  # ignore base64
 		return ( $attr, $val );
 	};
 
-	unwrap(\@orig_ldif);
-	unwrap(\@new_ldif);
+	unwrap( \@orig_ldif );
+	unwrap( \@new_ldif );
 
 	my $diff = Algorithm::Diff->new( \@orig_ldif, \@new_ldif );
 	HUNK:
@@ -1662,7 +1664,7 @@ use strict;
 use warnings;
 
 $0 = 'shelldap';
-my $VERSION = '0.2';
+my $VERSION = '0.3';
 
 use Getopt::Long;
 use YAML::Syck;
