@@ -30,9 +30,11 @@
 
 =head1 NAME
 
-Shelldap / LDAP::Shell
+Shelldap - A program for interacting with an LDAP server via a shell-like interface
 
-A program for interacting with an LDAP server via a shell-like
+=head1 DESCRIPTION
+
+Shelldap /LDAP::Shell is a program for interacting with an LDAP server via a shell-like
 interface.
 
 This is not meant to be an exhaustive LDAP editing and browsing
