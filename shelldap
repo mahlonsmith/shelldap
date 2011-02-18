@@ -996,7 +996,7 @@ sub run_cd
 	$self->base( $newbase );
 
 	# get new 'cwd' listing
-	my $s = $self->search({ scope => 'one' });
+	my $s = $self->search({ scope => 'one', attrs => ['dn'] });
 	if ( $s->{'code'} ) {
 		print "$s->{'message'}\n";
 		return;
@@ -1398,6 +1398,7 @@ sub run_list
 	my $self	= shift;
 	my @filters = @_;
 	my $base	= $self->base();
+	my $attrs 	= [ 'dn', 'hasSubordinates' ];
 
 	# setup filters
 	my ( $flags, $filter );
@@ -1415,13 +1416,16 @@ sub run_list
 	if ( $flags ) {
 		$recurse = $flags =~ /R/;
 		$long	= $flags =~ /l/;
+		if ($long) {
+			$attrs = [ '*', 'hasSubordinates' ];
+		}
 	}
 
 	my $s = $self->search({
 		scope  => $recurse ? 'sub' : 'one',
 		vals   => 1,
 		filter => $filter,
-		attrs  => [ '*', 'hasSubordinates' ]
+		attrs  => $attrs
 	});
 	if ( $s->{'code'} ) {
 		print "$s->{'message'}\n";
