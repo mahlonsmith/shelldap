@@ -1415,10 +1415,8 @@ sub run_list
 	my ( $recurse, $long );
 	if ( $flags ) {
 		$recurse = $flags =~ /R/;
-		$long	= $flags =~ /l/;
-		if ($long) {
-			$attrs = [ '*', 'hasSubordinates' ];
-		}
+		$long	 = $flags =~ /l/;
+		$attrs   = [ '*', 'hasSubordinates' ] if $long;
 	}
 
 	my $s = $self->search({
