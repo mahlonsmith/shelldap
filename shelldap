@@ -195,14 +195,16 @@ add a list of attributes to display.  Use '+' for server side attributes.
 
 =item B<  cd>
 
-Change directory.  Translated to LDAP, this changes the current basedn.
+Change DN.  Translated to LDAP, this changes the current basedn.
 All commands after a 'cd' operate within the new basedn.
 
-    cd                cd to 'home' basedn
+    cd                change to 'home' basedn
     cd ~              same thing
-    cd -              cd to previous directory
-    cd ou=People      cd to explicit path
-    cd ..             cd to parent node
+    cd -              change to previous node
+    cd ou=People      change to explicit path below current node
+    cd ..             change to parent node
+    cd ..,..,ou=Groups  change to node ou=Groups, which is a sibling
+                      to the current node's parent node
 
 Since LDAP doesn't actually limit what can be a container object, you
 can actually cd into any entry. Many commands then work on '.', meaning
@@ -347,9 +349,6 @@ tried to follow it.
 For now, it only makes sense to connect to a master if you plan on doing
 any writes.
 
-"cd ../ou=SomewhereElse" doesn't work, but "cd ../../" does.  This is
-weird, as both should probably work.
-
 =head1 BUGS / LIMITATIONS
 
 There is no support for editing binary data.  If you need to edit base64
@@ -368,7 +367,7 @@ use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
 use Net::LDAP qw(LDAP_SUCCESS LDAP_SERVER_DOWN);
-use Net::LDAP::Util qw(canonical_dn);
+use Net::LDAP::Util qw(canonical_dn ldap_explode_dn);
 use Net::LDAP::LDIF;
 use Data::Dumper;
 use File::Temp;
@@ -990,9 +989,21 @@ sub run_cd
 		$newbase = $self->{'previous_base'} || return;
 	}
 
-	# support '..'
-	if ( $newbase =~ /\.\./ ) {
-		$self->parent_dn( \$newbase );
+	# support '..' (possibly iterated and as prefix to a DN)
+	if ( $newbase =~ /^\.\.,?/ ) {
+		my @curbase = @{ldap_explode_dn($self->base(), casefold => 'none')};
+
+		# deal with leading ..,
+		while ($newbase =~ /^\.\./) {
+			shift(@curbase)  if (@curbase);
+			$newbase =~ s/^\.\.//;
+			last  if ($newbase !~ /,\s*/);
+			$newbase =~ s/,\s*//;
+		}
+
+		# build a new absolute DN
+		$newbase .= ',' . canonical_dn(\@curbase, casefold => 'none')
+			if (@curbase);
 	}
 	else {
 		$self->rdn_to_dn( \$newbase );
