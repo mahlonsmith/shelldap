@@ -1693,9 +1693,9 @@ use vars '$conf';
 $conf = load_config() || {};
 Getopt::Long::GetOptions(
 	$conf, 
-	'server=s',
-	'binddn=s',
-	'basedn=s',
+	'server|H=s',
+	'binddn|D=s',
+	'basedn|b=s',
 	'cacheage=i',
 	'timeout=i',
 	'tls_cacert=s',
