@@ -619,12 +619,9 @@ sub base
 	# try and determine base automatically from rootDSE
 	#
 	unless ( $self->{'base'} ) {
-		my $base = $self->{'root_dse'}->{'asn'} || {};
-		$base = $base->{'attributes'}			|| [];
-		$base = $base->[0]						|| {};
-		$base = $base->{'vals'}					|| [];
-		$conf->{'basedn'} = $base->[0];
-		$self->{'base'}   = $base->[0];
+		my @namingContexts = $self->{'root_dse'}->get_value('namingContexts');
+		$conf->{'basedn'} = $namingContexts[0];
+		$self->{'base'}   = $namingContexts[0];
 	}
 	if ( $_[0] ) {
 		$self->{'base'} = $_[0];
