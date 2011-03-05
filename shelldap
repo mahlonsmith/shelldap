@@ -368,6 +368,7 @@ use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
 use Net::LDAP qw(LDAP_SUCCESS LDAP_SERVER_DOWN);
+use Net::LDAP::Util qw(canonical_dn);
 use Net::LDAP::LDIF;
 use Data::Dumper;
 use File::Temp;
@@ -623,8 +624,9 @@ sub base
 		$conf->{'basedn'} = $namingContexts[0];
 		$self->{'base'}   = $namingContexts[0];
 	}
-	if ( $_[0] ) {
-		$self->{'base'} = $_[0];
+	if ( @_ ) {
+		my $base = canonical_dn($_[0], casefold => 'none');
+		$self->{'base'} = $base  if ($base);
 	}
 	return $self->{'base'};
 }
