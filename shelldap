@@ -364,7 +364,7 @@ use warnings;
 use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
-use Net::LDAP;
+use Net::LDAP qw(LDAP_SUCCESS LDAP_SERVER_DOWN);
 use Net::LDAP::LDIF;
 use Data::Dumper;
 use File::Temp;
@@ -661,7 +661,7 @@ sub is_valid_dn
 
 	my $r = $self->search({ base => $dn });
 
-	return $r->{'code'} == 0 ? 1 : 0;
+	return $r->{'code'} == LDAP_SUCCESS ? 1 : 0;
 }
 
 # perform an ldap search
@@ -698,7 +698,7 @@ sub search
 	# check for a lost connection, kill cached object so we
 	# try to reconnect on the next search.
 	#
-	$self->{'ldap'} = undef if $s->code() == 81;
+	$self->{'ldap'} = undef if $s->code() == LDAP_SERVER_DOWN;
 
 	$rv->{'entries'} =
 	  $opts->{'scope'} eq 'base' ? [ $s->shift_entry() ] : [ $s->entries() ];
@@ -1046,7 +1046,7 @@ sub run_copy
 	my $s_rdn = $s_dn;
 	$self->rdn_to_dn( \$s_dn );
 	my $s = $self->search({ base => $s_dn, vals => 1 });
-	unless ( $s->{'code'} == 0 ) {
+	unless ( $s->{'code'} == LDAP_SUCCESS ) {
 		print "No such object\n";
 		return;
 	}
@@ -1632,7 +1632,7 @@ sub run_passwd
 		newpasswd => $pw
 	);
 
-	if ( $rv->code() == 0 ) {
+	if ( $rv->code() == LDAP_SUCCESS ) {
 		print "Password updated successfully.\n";
 	} else {
 		print "Password error: " . $rv->error() . "\n";
