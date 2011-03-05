@@ -927,8 +927,7 @@ sub run_cat
 {
 	my $self  = shift;
 	my $dn    = shift;
-	my $attrs = \@_;
-	$attrs->[0] = '*' unless scalar @$attrs;
+	my @attrs = (@_) ? @_ : ('*');
 
 	unless ( $dn ) {
 		print "No dn provided.\n";
@@ -944,7 +943,7 @@ sub run_cat
 		$s = $self->search({
 			scope  => 'one',
 			vals   => 1,
-			attrs  => $attrs
+			attrs  => \@attrs
 		});
 	}
 	elsif ( $dn =~ /\*/ ) {
@@ -952,7 +951,7 @@ sub run_cat
 			scope  => 'one',
 			vals   => 1,
 			filter => $dn,
-			attrs  => $attrs
+			attrs  => \@attrs
 		});
 	}
 	else {
@@ -960,7 +959,7 @@ sub run_cat
 		$s = $self->search({
 			base   => $dn,
 			vals   => 1,
-			attrs  => $attrs
+			attrs  => \@attrs
 		});
 	}
 
