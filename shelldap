@@ -408,8 +408,7 @@ sub init
 	$self->{'root_dse'} = $self->ldap->root_dse();
 	if ( $conf->{'debug'} ) {
 		$self->{'schema'}   = $self->ldap->schema();
-		my @versions = 
-			@{ $self->{'root_dse'}->get_value('supportedLDAPVersion', asref => 1) };
+		my @versions = $self->{'root_dse'}->get_value('supportedLDAPVersion');
 		print "Connected to $conf->{'server'}\n";
 		print "Supported LDAP version: ", ( join ', ', @versions ), "\n";
 		print "Cipher in use: ", $self->ldap()->cipher(), "\n";
@@ -1491,7 +1490,7 @@ sub run_list
 		else {
 
 			# pull objectClasses, hash for lookup speed
-			my @oc   = @{ $e->get_value( 'objectClass', asref => 1 ) || [] };
+			my @oc   = $e->get_value('objectClass');
 			my %ochash;
 			map { $ochash{$_} = 1 } @oc;
 
