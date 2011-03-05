@@ -775,6 +775,18 @@ sub make_filter
 	return $filter;
 }
 
+
+# check whether a given string may be a filter
+# Synopsis: $yesNo = $self->is_valid_filter($string);
+sub is_valid_filter
+{
+	my $self  = shift;
+	my $filter = shift or return;
+	my $filterObject = Net::LDAP::Filter->new($filter);
+
+	return $filterObject ? 1 : 0
+}
+
 # little. yellow. different. better.
 #
 sub debug 
@@ -1404,35 +1416,50 @@ sub run_help
 
 sub run_list
 {
-	my $self	= shift;
-	my @filters = @_;
-	my $base	= $self->base();
-	my $attrs 	= [ 'hasSubordinates' ];
+	my $self = shift;
+	my @args = @_;
+	my $base = $self->base();
+	my @attrs = ();
+	my $flags = '';
+	my $filter = '(objectclass=*)';
 
-	# setup filters
-	my ( $flags, $filter );
-	if ( scalar @filters ) {
-		# support '-l' or '-R' listings
-		if ( $filters[0] =~ /\-[lR]|verbose/ ) {
-			$flags = shift @filters;
+	# parse arguments: [ <option> ...] [<filter> ...] [<attribute> ...]
+	if (@args) {
+		# options: support '-l' or '-R' listings
+		if ( $args[0] =~ /^\-([lR])/o ) {
+			$flags .= $1;
+			shift(@args);
 		}
+
+		my @filters;
+
+		# get filter elements from argument list
+		while (@args && $self->is_valid_filter($args[0])) {
+			push(@filters, shift(@args));
+		}
+
+		push(@filters, '(objectclass=*)')  if (!@filters);
 		
+		# construct OR'ed filter from filter elements
 		$filter = $self->make_filter( \@filters );
+
+		# remaining arguments must be attributes
+		push(@attrs, @args);
 	}
 
 	# flag booleans
 	my ( $recurse, $long );
 	if ( $flags ) {
-		$recurse = $flags =~ /R/;
-		$long	 = $flags =~ /l/;
-		$attrs   = [ '*', 'hasSubordinates' ] if $long;
+		$recurse = $flags =~ /R/o;
+		$long	 = $flags =~ /l/o;
+		push(@attrs, '*')  if ($long && !@attrs);
 	}
 
 	my $s = $self->search({
 		scope  => $recurse ? 'sub' : 'one',
 		vals   => 1,
 		filter => $filter,
-		attrs  => $attrs
+		attrs  => [ @attrs, 'hasSubordinates' ]
 	});
 	if ( $s->{'code'} ) {
 		print "$s->{'message'}\n";
@@ -1456,51 +1483,56 @@ sub run_list
 	# iterate and print
 	#
 	my $dn_count = 0;
-	my $dn;
 	foreach my $e ( sort { $a->dn() cmp $b->dn() } @{ $s->{'entries'} } ) {
-		$dn = $e->dn();
+		my $dn = $e->dn();
+
+		# only show RDN unless -l was given
+		$dn = canonical_dn([shift(@{ldap_explode_dn($dn, casefold => 'none')})],
+				   casefold => 'none')
+			unless ($long);
 
 		# if this entry is a container for other entries, append a
 		# trailing slash.
-		if ( $e->get_value('hasSubordinates') eq 'TRUE' ) {
-			$dn .= '/';
-		}
+		$dn .= '/'  if ($e->get_value('hasSubordinates') eq 'TRUE');
 
-		my $rdn = $dn;
-		$rdn =~ s/,$base//i;
+		# additional arguments given; show their values
+		if (@args) {
+			my @elements = ( $dn );
 
-		unless ( $long ) {
-			$dn = $rdn;
-			next;
-		}
-
-		# show descriptions
-		my $desc = $e->get_value('description');
-		if ( $desc ) {
-			$desc =~ s/\n.*//s; # 1st line only
-			$dn .= " ($desc)";
-		}
-
-		# no desc?  Try and infer something useful
-		# to display.
-		else {
-
-			# pull objectClasses, hash for lookup speed
-			my @oc   = $e->get_value('objectClass');
-			my %ochash;
-			map { $ochash{$_} = 1 } @oc;
-
-			foreach my $d_listing ( sort keys %descs ) {
-				if ( exists $ochash{ $d_listing } ) {
-					my $str = $e->get_value( $descs{ $d_listing }, asref => 1 );
-					$dn .= ' (' . (join ', ', @$str) . ')' if $str && scalar @$str;
-				}
-				next;
+			foreach my $attr (@args) {
+				my @vals = $e->get_value($attr);
+				push(@elements, join(',', @vals));
 			}
+
+			print join("\t", @elements)."\n";
 		}
-	} 
-	continue {
-		print "$dn\n";
+		else {
+			# show descriptions
+			my $desc = $e->get_value('description');
+			if ( $desc ) {
+				$desc =~ s/\n.*//s; # 1st line only
+				$dn .= " ($desc)";
+			}
+
+			# no desc?  Try and infer something useful
+			# to display.
+			else {
+
+				# pull objectClasses, hash for lookup speed
+				my @oc   = $e->get_value('objectClass');
+				my %ochash;
+				map { $ochash{$_} = 1 } @oc;
+
+				foreach my $d_listing ( sort keys %descs ) {
+					if ( exists $ochash{ $d_listing } ) {
+						my $str = $e->get_value( $descs{ $d_listing }, asref => 1 );
+						$dn .= ' (' . (join ', ', @$str) . ')' if $str && scalar @$str;
+					}
+					next;
+				}
+			}
+			print "$dn\n";
+		}
 		$dn_count++;
 	}
 	
