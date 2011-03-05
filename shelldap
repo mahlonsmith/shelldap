@@ -748,22 +748,6 @@ sub update_entries
 	return;
 }
 
-# parse parent ('..') cn requests
-#
-sub parent_dn 
-{
-	my $self = shift;	
-	my $rdn  = shift or return;
-	return unless ref $rdn;
-
-	# FIXME: 'cd ../ou=somewhere' should work
-	my $dn = $self->base();
-	my $dotcount = $$rdn =~ s/\.\./\.\./g;
-	$dn =~ s/^.*?,// for 1 .. $dotcount;
-
-	$$rdn = $dn;
-}
-
 # given an array ref of shell-like globs, 
 # make and return an LDAP filter object.
 #
