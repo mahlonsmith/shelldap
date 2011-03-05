@@ -1005,7 +1005,7 @@ sub run_cd
 	$self->base( $newbase );
 
 	# get new 'cwd' listing
-	my $s = $self->search({ scope => 'one', attrs => ['dn'] });
+	my $s = $self->search({ scope => 'one', attrs => [ '1.1' ] });
 	if ( $s->{'code'} ) {
 		print "$s->{'message'}\n";
 		return;
@@ -1407,7 +1407,7 @@ sub run_list
 	my $self	= shift;
 	my @filters = @_;
 	my $base	= $self->base();
-	my $attrs 	= [ 'dn', 'hasSubordinates' ];
+	my $attrs 	= [ 'hasSubordinates' ];
 
 	# setup filters
 	my ( $flags, $filter );
