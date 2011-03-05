@@ -760,9 +760,9 @@ sub make_filter
 	return unless scalar @$globs;
 
 	my $filter;
-	$filter = join '', map { "($_)" } @$globs;
-	$filter = '(|' . $filter . ')' if scalar @$globs > 1;
-	$filter = Net::LDAP::Filter->new( $filter );
+	$filter = join('', map { (/^\(.*\)$/o) ? $_ : "($_)" } @$globs);
+	$filter = '(|' . $filter . ')'  if (scalar(@$globs) > 1);
+	$filter = Net::LDAP::Filter->new($filter);
 
 	if ( $filter ) {
 		$self->debug('Filter parsed as: ' . $filter->as_string() . "\n");
