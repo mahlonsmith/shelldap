@@ -304,10 +304,16 @@ You can actually specify your own in your .shelldap.rc, like so:
 
 =item B<mkdir>
 
-Creates a new 'organizationalUnit' entry.
+Creates a new entry. The type of object created depends on
+the naming attribute given, and defaults to 'organizationalUnit'
+if none is given.
+Supported naming attributes and corresponding object classes are:
+    c	- country
+    o	- organization
+    ou	- organizationalUnit
 
-    mkdir containername
-    mkdir ou=whatever
+    mkdir myNewOrgUnit
+    mkdir o=myNewOrg
 
 =item B<move>
 
@@ -1546,24 +1552,47 @@ sub run_mkdir
 {
 	my $self = shift;
 	my $dir  = join ' ', @_;
+	my %ClassMap = ( c => 'country',
+			 o => 'organization',
+			 ou => 'organizationalUnit' );
+	my %class;
 
 	unless ( $dir ) {
 		print "No 'directory' provided.\n";
 		return;
 	}
 
-	# normalize ou name, then pull uniq val back out.
-	$dir = "ou=$dir" unless $dir =~ /^ou=/i;
+	# ToDo: path_to_dn
 	$self->rdn_to_dn( \$dir );
 
-	my $ou = $1
-	  if $dir =~ /^[\.\w]+(?:\s+)?=(?:\s+)?([\.\-\s\w]+),?/;
+	# normalize name, if it is not yet a legal DN
+	$dir = 'ou='.$dir  if (!canonical_dn($dir));
 
-	# add
-	my $r = $self->ldap()->add( $dir, attr => [
-		objectClass => [ 'top', 'organizationalUnit' ],
-		ou		  => $ou,
-	]);
+	# get RDN: naming attributes (lower-case) and their values
+        my %rdn = %{ shift(@{ ldap_explode_dn($dir, casefold => 'lower') }) };
+
+	# without RDN, return error
+	unless ( %rdn ) {
+		print "Illegal DN: $dir\n";
+		return;
+	}
+
+	# get objectclass from naming attributes
+	foreach my $attr (keys(%rdn)) {
+		map { $class{$ClassMap{$_}} = 1  if ($attr =~ /^\Q$_\E$/); }
+		    keys(%ClassMap);
+	}
+
+	# fail if we did not get a unique objectclass
+	unless (scalar(keys(%class)) == 1) {
+		print "Unsupported DN: $dir\n";
+		return;
+	}
+
+	# create the new object
+	my $r = $self->ldap()->add($dir,
+				   attr => [ objectClass => [ 'top', keys(%class) ],
+					     %rdn ]);
 
 	print $r->error(), "\n";
 	$self->update_entries( clearcache => 1 );
