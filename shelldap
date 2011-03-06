@@ -1005,7 +1005,8 @@ sub run_cat
 		});
 	}
 	else {
-		$self->rdn_to_dn( \$dn );
+		# convert given path to DN
+		$dn = $self->path_to_dn($dn, relative => 1);
 		$s = $self->search({
 			base   => $dn,
 			vals   => 1,
@@ -1086,8 +1087,9 @@ sub run_copy
 		return;
 	}
 
-	my $s_rdn = $s_dn;
-	$self->rdn_to_dn( \$s_dn );
+	# convert given source path to DN
+	$s_dn = $self->path_to_dn($s_dn, relative => 1);
+
 	my $s = $self->search({ base => $s_dn, vals => 1 });
 	unless ( $s->{'code'} == LDAP_SUCCESS ) {
 		print "No such object\n";
@@ -1254,10 +1256,9 @@ sub run_edit
 		return;
 	}
 
-	# support '.'
-	$dn = $self->base() if $dn eq '.';
+	# convert given path to DN
+	$dn = $self->path_to_dn($dn, relative => 1);
 
-	$self->rdn_to_dn( \$dn );
 	my $s = $self->search({ base => $dn, vals => 1 });
 
 	if ( $s->{'code'} ) {
@@ -1418,7 +1419,8 @@ sub run_grep
 		print "No search base specified.\n";
 		return;
 	}
-	$self->rdn_to_dn( \$base );
+	# convert base path to DN
+	$base = $self->path_to_dn($base, relative => 1);
 
 	$self->debug("Filter parsed as: " . $filter->as_string() . "\n");
 
@@ -1643,8 +1645,9 @@ sub run_move
 		return;
 	}
 
-	my $s_rdn = $s_dn;
-	$self->rdn_to_dn( \$s_dn );
+	# convert given source path to DN
+	$s_dn = $self->path_to_dn($s_dn, relative => 1);
+
 	unless ( $self->is_valid_dn( $s_dn ) ) {
 		print "No such object\n";
 		return;
@@ -1683,10 +1686,9 @@ sub run_passwd
 		return;
 	}
 
-	# support '.'
-	$dn = $self->base() if $dn eq '.';
+	# convert given path to DN
+	$self->path_to_dn($dn, relative => 1);
 
-	$self->rdn_to_dn( \$dn );
 	my $s = $self->search( { base => $dn, scope => 'base' } );
 	if ( $s->{'code'} ) {
 		print $s->{'message'}, "\n";
