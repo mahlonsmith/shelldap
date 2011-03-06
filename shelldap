@@ -636,27 +636,6 @@ sub base
 	return $self->{'base'};
 }
 
-# make sure a given rdn includes the current
-# base, making it a dn.
-# accepts a string reference.
-# 
-sub rdn_to_dn 
-{
-	my $self = shift;
-	my $rdn  = shift or return;
-
-	return unless ref $rdn;
-
-	# allow cd to 'basedn' and cd to directories 'higher' in the tree
-	return if $$rdn =~ /$conf->{'basedn'}$/;
-
-	# auto fill in current base for deeper DNs
-	my ( $dn, $curbase ) = ( $$rdn, $self->base() );
-	$dn = "$$rdn," . $curbase unless $$rdn =~ /$curbase/i;
-
-	$$rdn = $dn;
-}
-
 # do a search on a dn to determine if it is valid.
 # returns a bool.
 #
