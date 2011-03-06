@@ -754,6 +754,53 @@ sub update_entries
 	return;
 }
 
+# convert a given path to a DN: deal with '..', '.', '~'
+# Synopsis: $dn = $self->path_to_dn($path, [relative => N]);
+sub path_to_dn
+{
+	my $self  = shift;
+	my $path = shift;
+	my %flags = @_;
+	my $base = $self->base();
+
+	# fail on wrong / missing parameter
+	return undef  if (!defined($path));
+
+	# return configured base DN
+	return($conf->{basedn})  if ($path eq '~');
+
+	# return current base DN
+	return($base)  if ($path eq '.');
+
+	if ($path =~ /^\.\./o) {	# relative path
+		# support '..' (possibly iterated and as prefix to a DN)
+		my @base = @{ldap_explode_dn($base, casefold => 'none')};
+
+		# deal with leading ..,
+		while ($path =~ /^\.\./) {
+			shift(@base)  if (@base);
+			$path =~ s/^\.\.//;
+			last  if ($path !~ /,\s*/);
+			$path =~ s/,\s*//;
+		}
+
+		# build a new absolute DN
+		$path .= ',' . canonical_dn(\@base, casefold => 'none')
+			if (@base);
+	}
+	elsif ($path =~ /,\s*~$/o) {	# absolute path
+		$path =~ s/,\s*~$//;
+		$path.= ','.$conf->{basedn}
+			if ($conf->{basedn});
+	}
+	else {				# relative or absolute path
+		$path.= ','.$conf->{basedn}
+			if ($conf->{basedn} && $flags{relative});
+	}
+
+	return($path);
+}
+
 # given an array ref of shell-like globs, 
 # make and return an LDAP filter object.
 #
@@ -991,25 +1038,8 @@ sub run_cd
 		$newbase = $self->{'previous_base'} || return;
 	}
 
-	# support '..' (possibly iterated and as prefix to a DN)
-	if ( $newbase =~ /^\.\.,?/ ) {
-		my @curbase = @{ldap_explode_dn($self->base(), casefold => 'none')};
-
-		# deal with leading ..,
-		while ($newbase =~ /^\.\./) {
-			shift(@curbase)  if (@curbase);
-			$newbase =~ s/^\.\.//;
-			last  if ($newbase !~ /,\s*/);
-			$newbase =~ s/,\s*//;
-		}
-
-		# build a new absolute DN
-		$newbase .= ',' . canonical_dn(\@curbase, casefold => 'none')
-			if (@curbase);
-	}
-	else {
-		$self->rdn_to_dn( \$newbase );
-	}
+	# convert given path to a DN
+	$newbase = $self->path_to_dn($newbase, relative => 1);
 	
 	unless ( $self->is_valid_dn( $newbase ) ) {
 		print "No such object\n";
@@ -1562,8 +1592,8 @@ sub run_mkdir
 		return;
 	}
 
-	# ToDo: path_to_dn
-	$self->rdn_to_dn( \$dir );
+	# convert given path to DN
+	$dir = $self->path_to_dn($dir, relative => 1);
 
 	# normalize name, if it is not yet a legal DN
 	$dir = 'ou='.$dir  if (!canonical_dn($dir));
