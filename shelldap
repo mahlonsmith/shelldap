@@ -1065,7 +1065,7 @@ sub run_copy
 	# perhaps there is a better way to do this...?
 	#
 	my ( $uniqkey, $uniqval ) = ( $1, $2 )
-	  if $d_dn =~ /^([\.\w]+)(?:\s+)?=(?:\s+)?([\.\-\s\w]+),?/;
+	  if $d_dn =~ /^([\.\w\-]+)(?:\s+)?=(?:\s+)?([\.\-\s\w]+),?/;
 	unless ( $uniqkey && $uniqval ) {
 		print "Unable to parse unique values from rdn.\n";
 		return;
