@@ -289,9 +289,10 @@ aliased to: ls
     ls -lR uid=mahlon
     list uid=m*
 
-In 'verbose' mode, descriptions are listed as well, if they exist.
-There are also some 'sane' long listings for common objectClass types.
-You can actually specify your own in your .shelldap.rc, like so:
+In 'long' mode, descriptions are listed as well, if they exist.
+There are some default 'long listing' mappings for common objectClass
+types.  You can additionally specify your own mappings in your
+.shelldap.rc, like so:
 
     ...
     descmaps:
@@ -299,7 +300,6 @@ You can actually specify your own in your .shelldap.rc, like so:
         posixAccount: gecos
         posixGroup: gidNumber
         ipHost: ipHostNumber
-        puppetClient: puppetclass
 
 =item B<mkdir>
 
@@ -528,7 +528,7 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		unless ( $response =~ /^n/i ) {
 			YAML::Syck::DumpFile( $conf->{'confpath'}, $conf );
 			chmod 0600, $conf->{'confpath'};
-			print "Connection info cached.\n";
+			print "Connection info cached to $conf->{'confpath'}.\n";
 		}
 	}
 
