@@ -195,16 +195,16 @@ add a list of attributes to display.  Use '+' for server side attributes.
 
 =item B<  cd>
 
-Change DN.  Translated to LDAP, this changes the current basedn.
+Change directory.  Translated to LDAP, this changes the current basedn.
 All commands after a 'cd' operate within the new basedn.
 
-    cd                change to 'home' basedn
-    cd ~              same thing
-    cd -              change to previous node
-    cd ou=People      change to explicit path below current node
-    cd ..             change to parent node
-    cd ..,..,ou=Groups  change to node ou=Groups, which is a sibling
-                      to the current node's parent node
+    cd                  change to 'home' basedn
+    cd ~                change to the binddn, or basedn if anonymously bound
+    cd -                change to previous node
+    cd ou=People        change to explicit path below current node
+    cd ..               change to parent node
+    cd ../../ou=Groups  change to node ou=Groups, which is a sibling
+                        to the current node's grandparent
 
 Since LDAP doesn't actually limit what can be a container object, you
 can actually cd into any entry. Many commands then work on '.', meaning
@@ -372,8 +372,8 @@ use warnings;
 use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
-use Net::LDAP qw(LDAP_SUCCESS LDAP_SERVER_DOWN);
-use Net::LDAP::Util qw(canonical_dn ldap_explode_dn);
+use Net::LDAP qw/ LDAP_SUCCESS LDAP_SERVER_DOWN /;
+use Net::LDAP::Util qw/ canonical_dn ldap_explode_dn /;
 use Net::LDAP::LDIF;
 use Data::Dumper;
 use File::Temp;
@@ -733,51 +733,54 @@ sub update_entries
 	return;
 }
 
-# convert a given path to a DN: deal with '..', '.', '~'
-# Synopsis: $dn = $self->path_to_dn($path, [relative => N]);
+# convert a given path to a DN: deal with '..', '.'
+# Synopsis: $dn = $self->path_to_dn( $path );
 sub path_to_dn
 {
-	my $self  = shift;
-	my $path = shift;
-	my %flags = @_;
-	my $base = $self->base();
-
-	# fail on wrong / missing parameter
-	return undef  if (!defined($path));
-
-	# return configured base DN
-	return($conf->{basedn})  if ($path eq '~');
+	my $self    = shift;
+	my $path    = shift;
+	my %flags   = @_;
+	my $curbase = $self->base();
 
 	# return current base DN
-	return($base)  if ($path eq '.');
+	return $curbase if $path eq '.';
 
-	if ($path =~ /^\.\./o) {	# relative path
+	# support 'cd -'
+	return $self->{'previous_base'} if $path eq '-';
+
+	# support empty 'cd' or 'cd ~' going to root
+	return $conf->{'basedn'} if $path eq '~' || ! $path;
+
+	# relative path, upwards
+	#
+	if ( $path =~ /^\.\./o ) {
 		# support '..' (possibly iterated and as prefix to a DN)
-		my @base = @{ldap_explode_dn($base, casefold => 'none')};
+		my @base = @{ ldap_explode_dn($curbase, casefold => 'none') };
 
 		# deal with leading ..,
-		while ($path =~ /^\.\./) {
-			shift(@base)  if (@base);
+		while ( $path =~ /^\.\./ ) {
+			shift( @base ) if @base;
 			$path =~ s/^\.\.//;
-			last  if ($path !~ /,\s*/);
-			$path =~ s/,\s*//;
+			last if $path !~ /[,\/]\s*/;
+			$path =~ s/[,\/]\s*//;
 		}
 
-		# build a new absolute DN
-		$path .= ',' . canonical_dn(\@base, casefold => 'none')
-			if (@base);
-	}
-	elsif ($path =~ /,\s*~$/o) {	# absolute path
-		$path =~ s/,\s*~$//;
-		$path.= ','.$conf->{basedn}
-			if ($conf->{basedn});
-	}
-	else {				# relative or absolute path
-		$path.= ','.$conf->{basedn}
-			if ($conf->{basedn} && $flags{relative});
+		# append the new dn to the node if one was specified:
+		#    cd ../../cn=somewhere  vs
+		#    cd ../../
+		#
+		my $newbase_root = canonical_dn( \@base, casefold => 'none' );
+		$path = $path ? $path . ',' . $newbase_root : $newbase_root;
 	}
 
-	return($path);
+	# attach the base if it isn't already there (this takes care of
+	# deeper relative nodes and absolutes)
+	#
+	else {
+		$path = "$path," . $curbase unless $path =~ /$curbase/;
+	}
+
+	return $path;
 }
 
 # given an array ref of shell-like globs, 
@@ -985,7 +988,7 @@ sub run_cat
 	}
 	else {
 		# convert given path to DN
-		$dn = $self->path_to_dn($dn, relative => 1);
+		$dn = $self->path_to_dn( $dn );
 		$s = $self->search({
 			base   => $dn,
 			vals   => 1,
@@ -1009,18 +1012,10 @@ sub run_cd
 {
 	my $self	= shift;
 	my $newbase = join ' ', @_;
-	
-	# support 'cd' going to root
-	$newbase ||= $conf->{'basedn'};
-
-	# support 'cd -'
-	if ( $newbase eq '-' ) {
-		$newbase = $self->{'previous_base'} || return;
-	}
 
 	# convert given path to a DN
-	$newbase = $self->path_to_dn($newbase, relative => 1);
-	
+	$newbase = $self->path_to_dn( $newbase );
+
 	unless ( $self->is_valid_dn( $newbase ) ) {
 		print "No such object\n";
 		return;
@@ -1067,7 +1062,7 @@ sub run_copy
 	}
 
 	# convert given source path to DN
-	$s_dn = $self->path_to_dn($s_dn, relative => 1);
+	$s_dn = $self->path_to_dn( $s_dn );
 
 	my $s = $self->search({ base => $s_dn, vals => 1 });
 	unless ( $s->{'code'} == LDAP_SUCCESS ) {
@@ -1236,7 +1231,7 @@ sub run_edit
 	}
 
 	# convert given path to DN
-	$dn = $self->path_to_dn($dn, relative => 1);
+	$dn = $self->path_to_dn( $dn );
 
 	my $s = $self->search({ base => $dn, vals => 1 });
 
@@ -1398,8 +1393,9 @@ sub run_grep
 		print "No search base specified.\n";
 		return;
 	}
+
 	# convert base path to DN
-	$base = $self->path_to_dn($base, relative => 1);
+	$base = $self->path_to_dn( $base );
 
 	$self->debug("Filter parsed as: " . $filter->as_string() . "\n");
 
@@ -1574,7 +1570,7 @@ sub run_mkdir
 	}
 
 	# convert given path to DN
-	$dir = $self->path_to_dn($dir, relative => 1);
+	$dir = $self->path_to_dn( $dir );
 
 	# normalize name, if it is not yet a legal DN
 	$dir = 'ou='.$dir  if (!canonical_dn($dir));
@@ -1625,7 +1621,7 @@ sub run_move
 	}
 
 	# convert given source path to DN
-	$s_dn = $self->path_to_dn($s_dn, relative => 1);
+	$s_dn = $self->path_to_dn( $s_dn );
 
 	unless ( $self->is_valid_dn( $s_dn ) ) {
 		print "No such object\n";
@@ -1666,7 +1662,7 @@ sub run_passwd
 	}
 
 	# convert given path to DN
-	$self->path_to_dn($dn, relative => 1);
+	$self->path_to_dn( $dn );
 
 	my $s = $self->search( { base => $dn, scope => 'base' } );
 	if ( $s->{'code'} ) {
