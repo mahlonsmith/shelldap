@@ -624,9 +624,9 @@ sub base
 		$conf->{'basedn'} = $namingContexts[0];
 		$self->{'base'}   = $namingContexts[0];
 	}
-	if ( @_ ) {
-		my $base = canonical_dn($_[0], casefold => 'none');
-		$self->{'base'} = $base  if ($base);
+	if ( $_[0] ) {
+		my $base = canonical_dn( $_[0], casefold => 'none' );
+		$self->{'base'} = $base if $base;
 	}
 	return $self->{'base'};
 }
