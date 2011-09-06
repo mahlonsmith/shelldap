@@ -444,6 +444,16 @@ sub ldap
 	
 	# fill in potentially missing info
 	die "No server specified.\n" unless $conf->{'server'};
+
+	# Emit a nicer error message if IO::Socket::SSL is
+	# not installed and Net::LDAP decides it is required.
+	#
+	if ( $conf->{'tls'} || $conf->{'server'} =~ m|ldaps://| ) {
+		eval 'use IO::Socket::SSL';
+		die qq{IO::Socket::SSL not installed, but is required for SSL or TLS connections.
+You may try connecting insecurely, or install the module and try again.\n} if $@;
+	}
+
 	if ( $conf->{'binddn'} && ! $conf->{'bindpass'} ) {
 		print "Bind password: ";
 		Term::ReadKey::ReadMode 2;
@@ -457,7 +467,8 @@ sub ldap
 		or die "Unable to connect to LDAP server '$conf->{'server'}': $!\n";
 
 	# secure connection options
-	if ( $conf->{'tls'} ) {
+	#
+	if ( $conf->{'tls'} )  {
 		if ( $conf->{'tls_key'} ) {
 			$ldap->start_tls( 
 				verify     => 'require',
@@ -494,7 +505,7 @@ sub ldap
 
 	my $err = $rv->error();
 	if ( $rv->code() ) {
-		$err .= " (forgot the --tls flag?)"
+		$err .= " (try the --tls flag?)"
 			if $err =~ /confidentiality required/i;
 		die "LDAP bind error: $err\n";
 	}
@@ -503,6 +514,7 @@ sub ldap
 	# if we enter this conditional, we have successfully 
 	# authed with the server (non anonymous), and 
 	# we haven't cached anything in the past.
+	#
 	if ( $conf->{'binddn'} && ! -e $conf->{'confpath'} ) {
 		print "Would you like to cache your connection information? [Y/n]: ";
 		chomp( my $response = <STDIN> );
