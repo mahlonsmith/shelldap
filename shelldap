@@ -1513,7 +1513,8 @@ sub run_list
 
 		# if this entry is a container for other entries, append a
 		# trailing slash.
-		$dn .= '/'  if ($e->get_value('hasSubordinates') eq 'TRUE');
+		$dn .= '/'  if $e->get_value('hasSubordinates') &&
+			$e->get_value('hasSubordinates') eq 'TRUE';
 
 		# additional arguments/attributes were given; show their values
 		#
