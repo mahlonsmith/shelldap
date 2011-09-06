@@ -288,7 +288,6 @@ aliased to: ls
     ls -l
     ls -lR uid=mahlon
     list uid=m*
-    list verbose
 
 In 'verbose' mode, descriptions are listed as well, if they exist.
 There are also some 'sane' long listings for common objectClass types.
@@ -813,14 +812,15 @@ sub make_filter
 
 # check whether a given string may be a filter
 # Synopsis: $yesNo = $self->is_valid_filter($string);
+#
 sub is_valid_filter
 {
-	my $self  = shift;
+	my $self   = shift;
 	my $filter = shift or return;
-	my $filterObject = Net::LDAP::Filter->new($filter);
 
-	return $filterObject ? 1 : 0
+	return Net::LDAP::Filter->new( $filter ) ? 1 : 0;
 }
+
 
 # little. yellow. different. better.
 #
@@ -1429,44 +1429,42 @@ sub run_help
 
 sub run_list
 {
-	my $self = shift;
-	my @args = @_;
-	my $base = $self->base();
+	my $self  = shift;
+	my @args  = @_;
 	my @attrs = ();
-	my $flags = '';
-	my $filter = '(objectclass=*)';
+	my $filter;
+
+	# flag booleans
+	my ( $recurse, $long );
 
 	# parse arguments: [ <option> ...] [<filter> ...] [<attribute> ...]
-	if (@args) {
+	if ( scalar @args ) {
 		# options: support '-l' or '-R' listings
-		if ( $args[0] =~ /^\-([lR])/o ) {
-			$flags .= $1;
-			shift(@args);
+		if ( $args[0] =~ /^\-(\w+)/o ) {
+			my $flags = $1;
+			$recurse  = $flags =~ /R/;
+			$long	  = $flags =~ /l/;
+			shift( @args );
 		}
 
 		my @filters;
 
 		# get filter elements from argument list
-		while (@args && $self->is_valid_filter($args[0])) {
-			push(@filters, shift(@args));
+		while ( @args && $self->is_valid_filter($args[0]) ) {
+			push( @filters, shift(@args) );
 		}
 
-		push(@filters, '(objectclass=*)')  if (!@filters);
+		push( @filters, '(objectClass=*)' ) unless scalar @filters;
 		
 		# construct OR'ed filter from filter elements
 		$filter = $self->make_filter( \@filters );
 
 		# remaining arguments must be attributes
-		push(@attrs, @args);
+		push( @attrs, @args );
 	}
 
-	# flag booleans
-	my ( $recurse, $long );
-	if ( $flags ) {
-		$recurse = $flags =~ /R/o;
-		$long	 = $flags =~ /l/o;
-		push(@attrs, '*')  if ($long && !@attrs);
-	}
+	# Get all attributes if none are specified, and we're in long-list mode.
+	push( @attrs, '*' )  if $long && ! scalar @attrs;
 
 	my $s = $self->search({
 		scope  => $recurse ? 'sub' : 'one',
@@ -1496,32 +1494,42 @@ sub run_list
 	# iterate and print
 	#
 	my $dn_count = 0;
+	my $base = $self->base();
 	foreach my $e ( sort { $a->dn() cmp $b->dn() } @{ $s->{'entries'} } ) {
 		my $dn = $e->dn();
+		next if lc( $dn ) eq lc( $base );
 
-		# only show RDN unless -l was given
-		$dn = canonical_dn([shift(@{ldap_explode_dn($dn, casefold => 'none')})],
-				   casefold => 'none')
-			unless ($long);
+		if ( ! $long ) {
+			# strip the current base from the dn, if we're recursing and not in long mode
+			if ( $recurse ) {
+				$dn =~ s/,$base//oi;
+			}
+
+			# only show RDN unless -l was given
+			else {
+				$dn = canonical_dn( [shift(@{ldap_explode_dn($dn, casefold => 'none')})], casefold => 'none' )
+			}
+		}
 
 		# if this entry is a container for other entries, append a
 		# trailing slash.
 		$dn .= '/'  if ($e->get_value('hasSubordinates') eq 'TRUE');
 
-		# additional arguments given; show their values
-		if (@args) {
+		# additional arguments/attributes were given; show their values
+		#
+		if ( scalar @args ) {
 			my @elements = ( $dn );
 
-			foreach my $attr (@args) {
-				my @vals = $e->get_value($attr);
-				push(@elements, join(',', @vals));
+			foreach my $attr ( @args ) {
+				my @vals = $e->get_value( $attr );
+				push( @elements, join(',', @vals) );
 			}
 
-			print join("\t", @elements)."\n";
+			print join( "\t", @elements )."\n";
 		}
 		else {
 			# show descriptions
-			my $desc = $e->get_value('description');
+			my $desc = $e->get_value( 'description' );
 			if ( $desc ) {
 				$desc =~ s/\n.*//s; # 1st line only
 				$dn .= " ($desc)";
@@ -1532,7 +1540,7 @@ sub run_list
 			else {
 
 				# pull objectClasses, hash for lookup speed
-				my @oc   = $e->get_value('objectClass');
+				my @oc   = $e->get_value( 'objectClass' );
 				my %ochash;
 				map { $ochash{$_} = 1 } @oc;
 
