@@ -90,6 +90,7 @@ Required. The LDAP server to connect to.  This can be a hostname, IP
 address, or a URI.
 
     --server ldaps://ldap.example.net
+    -H ldaps://ldap.example.net
 
 =back
 
@@ -101,6 +102,7 @@ The full dn of a user to authenticate as.  If not specified, defaults to
 an anonymous bind.  You will be prompted for a password.
 
     --binddn cn=Manager,dc=your,o=company
+    -D cn=Manager,dc=your,o=company
 
 =back
 
@@ -112,6 +114,7 @@ The directory 'root' of your LDAP server.  If omitted, shelldap will
 try and ask the server for a sane default.
 
     --basedn dc=your,o=company
+    -b dc=your,o=company
 
 =back
 
