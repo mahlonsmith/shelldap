@@ -1651,7 +1651,7 @@ sub run_passwd
 	}
 
 	# convert given path to DN
-	$self->path_to_dn( $dn );
+	$dn = $self->path_to_dn( $dn );
 
 	my $s = $self->search( { base => $dn, scope => 'base' } );
 	if ( $s->{'code'} ) {
