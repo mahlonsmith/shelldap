@@ -1013,7 +1013,7 @@ sub run_cat
 sub run_cd 
 {
 	my $self	= shift;
-	my $newbase = join ' ', @_;
+	my $newbase = shift;
 
 	# convert given path to a DN
 	$newbase = $self->path_to_dn( $newbase );
@@ -1225,7 +1225,7 @@ sub run_delete
 sub run_edit
 {
 	my $self = shift;
-	my $dn   = join ' ', @_;
+	my $dn   = shift;
 
 	unless ( $dn ) {
 		print "No dn provided.\n";
@@ -1569,7 +1569,7 @@ sub run_list
 sub run_mkdir
 {
 	my $self = shift;
-	my $dir  = join ' ', @_;
+	my $dir  = shift;
 
 	unless ( $dir ) {
 		print "No 'directory' provided.\n";
