@@ -681,19 +681,29 @@ sub search
 		attrs	  => $opts->{'attrs'} || ['*']
 	);
 
+	# since search is used just about everywhere, this seems like
+	# a pretty good place to check for connection errors and try
+	# to re-establish a connection.
+	#
+	if ( $s->code() != 0 ) {
+		$self->debug( "Error ". $s->code() . ", retrying.\n" );
+		$self->{'ldap'} = undef;
+
+		$s = $self->ldap->search(
+			base	  => $opts->{'base'},
+			filter	  => $opts->{'filter'},
+			scope	  => $opts->{'scope'},
+			timelimit => $conf->{'timeout'},
+			typesonly => ! $opts->{'vals'},
+			attrs	  => $opts->{'attrs'} || ['*']
+		);
+	}
+
 	my $rv = {
 		code	  => $s->code(),
 		message   => $s->error(),
 		entries   => []
 	};
-
-	# since search is used just about everywhere, this seems like 
-	# a pretty good place to check for connection errors.
-	#
-	# check for a lost connection, kill cached object so we
-	# try to reconnect on the next search.
-	#
-	$self->{'ldap'} = undef if $s->code() == LDAP_SERVER_DOWN;
 
 	$rv->{'entries'} =
 	  $opts->{'scope'} eq 'base' ? [ $s->shift_entry() ] : [ $s->entries() ];
