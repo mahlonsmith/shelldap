@@ -762,14 +762,14 @@ sub path_to_dn
 	my %flags   = @_;
 	my $curbase = $self->base();
 
+	# support empty 'cd' or 'cd ~' going to root
+	return $conf->{'basedn'} if ! $path || $path eq '~';
+
 	# return current base DN
 	return $curbase if $path eq '.';
 
 	# support 'cd -'
 	return $self->{'previous_base'} if $path eq '-';
-
-	# support empty 'cd' or 'cd ~' going to root
-	return $conf->{'basedn'} if $path eq '~' || ! $path;
 
 	# relative path, upwards
 	#
