@@ -1,5 +1,5 @@
 
-VERSION := $(shell awk '/VERSION/ { print $$4 }' shelldap | sed -e "s/[';]//g")
+VERSION := $(shell awk '/VERSION =/ { print $$4 }' shelldap | sed -e "s/[';]//g")
 
 release:
 	@mkdir shelldap-${VERSION}
