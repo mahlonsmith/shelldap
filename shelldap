@@ -382,7 +382,17 @@ use warnings;
 use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
-use Net::LDAP qw/ LDAP_SUCCESS LDAP_SERVER_DOWN /;
+use Net::LDAP qw/
+	LDAP_SUCCESS
+	LDAP_SERVER_DOWN
+	LDAP_OPERATIONS_ERROR
+	LDAP_TIMELIMIT_EXCEEDED
+	LDAP_BUSY
+	LDAP_UNAVAILABLE
+	LDAP_OTHER
+	LDAP_TIMEOUT
+	LDAP_NO_MEMORY
+	LDAP_CONNECT_ERROR /;
 use Net::LDAP::Util qw/ canonical_dn ldap_explode_dn /;
 use Net::LDAP::LDIF;
 use Data::Dumper;
@@ -672,24 +682,8 @@ sub search
 	$opts->{'filter'} ||= '(objectClass=*)';
 	$opts->{'scope'}  ||= 'base';
 
-	my $s = $self->ldap->search(
-		base	  => $opts->{'base'},
-		filter	  => $opts->{'filter'},
-		scope	  => $opts->{'scope'},
-		timelimit => $conf->{'timeout'},
-		typesonly => ! $opts->{'vals'},
-		attrs	  => $opts->{'attrs'} || ['*']
-	);
-
-	# since search is used just about everywhere, this seems like
-	# a pretty good place to check for connection errors and try
-	# to re-establish a connection.
-	#
-	if ( $s->code() != 0 ) {
-		$self->debug( "Error ". $s->code() . ", retrying.\n" );
-		$self->{'ldap'} = undef;
-
-		$s = $self->ldap->search(
+	my $search = sub { 
+		return $self->ldap->search(
 			base	  => $opts->{'base'},
 			filter	  => $opts->{'filter'},
 			scope	  => $opts->{'scope'},
@@ -697,8 +691,9 @@ sub search
 			typesonly => ! $opts->{'vals'},
 			attrs	  => $opts->{'attrs'} || ['*']
 		);
-	}
+	};
 
+	my $s = $self->with_retry( $search );
 	my $rv = {
 		code	  => $s->code(),
 		message   => $s->error(),
@@ -840,6 +835,36 @@ sub is_valid_filter
 	my $filter = shift or return;
 
 	return Net::LDAP::Filter->new( $filter ) ? 1 : 0;
+}
+
+
+# Call code in subref $action, if there's any connection related errors,
+# try it one additional time before giving up.  This should take care of
+# most server disconnects due to timeout and other generic connection
+# errors, and will attempt to re-establish a connection.
+#
+sub with_retry
+{
+	my $self = shift;
+	my $action = shift;
+
+	my $rv = $action->();
+	if ( $rv->code() == LDAP_OPERATIONS_ERROR   ||
+		 $rv->code() == LDAP_TIMELIMIT_EXCEEDED ||
+		 $rv->code() == LDAP_BUSY               ||
+		 $rv->code() == LDAP_UNAVAILABLE        ||
+		 $rv->code() == LDAP_OTHER              ||
+		 $rv->code() == LDAP_SERVER_DOWN        ||
+		 $rv->code() == LDAP_TIMEOUT            ||
+		 $rv->code() == LDAP_NO_MEMORY          ||
+		 $rv->code() == LDAP_CONNECT_ERROR ) {
+
+		$self->debug( "Error ". $rv->code() . ", retrying.\n" );
+		$self->{'ldap'} = undef;
+		$rv = $action->();
+	}
+
+	return $rv;
 }
 
 
@@ -1197,7 +1222,8 @@ sub run_create
 		return;
 	}
 	$e->changetype('add');
-	my $rv = $e->update( $self->ldap() );
+	my $create = sub { return $e->update($self->ldap()) };
+	my $rv = $self->with_retry( $create );
 	print $rv->error(), "\n";
 
 	$self->update_entries( clearcache => 1 ) unless $rv->code();
@@ -1272,6 +1298,20 @@ sub run_edit
 	my @orig_ldif = <LDIF>;
 	close LDIF;
 
+	# append optional, unused attributes as comments
+	# for fast reference.
+	#
+	open LDIF, ">> $self->{'ldif_fname'}";
+	my %current_attrs = map { $_ => 1 } $e->attributes();
+	foreach my $oc ( $e->get_value('objectClass') ) {
+		my @may = $self->{'schema'}->may( $oc );
+		foreach my $opt_attr ( sort { $a->{'name'} cmp $b->{'name'} } @may ) {
+			next if $current_attrs{ $opt_attr->{'name'} };
+			print LDIF "# " . $opt_attr->{'name'} . ":\n";
+		}
+	}
+	close LDIF;
+
 	# checksum it, then open it in an editor
 	my $hash_a = $self->chksum( $self->{'ldif_fname'} );
 	system( "$self->{'editor'} $self->{'ldif_fname'}" ) &&
@@ -1322,8 +1362,8 @@ sub run_edit
 		# total deletions
 		if ( $diff_bit == 1 ) {
 			foreach ( $diff->Items(1) ) {
-				$self->debug("DELETE: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("DELETE: $_");
 				$e->delete( $attr => [ $val ] );
 			}
 		}
@@ -1331,8 +1371,8 @@ sub run_edit
 		# new insertions
 		if ( $diff_bit == 2 ) {
 			foreach ( $diff->Items(2) ) {
-				$self->debug("INSERT: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("INSERT: $_");
 				$e->add( $attr => $val );
 			}
 		}
@@ -1340,8 +1380,8 @@ sub run_edit
 		# replacements
 		if ( $diff_bit == 3 ) {
 			foreach ( $diff->Items(2) ) {
-				$self->debug("MODIFY: $_");
 				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("MODIFY: $_");
 
 				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
 				my $cur_valcount = scalar @$cur_vals;
@@ -1373,7 +1413,8 @@ sub run_edit
 	}
 
 	unlink $self->{'ldif_fname'};
-	my $rv = $e->update( $self->ldap );
+	my $update = sub { return $e->update( $self->ldap ); };
+	my $rv = $self->with_retry( $update );
 	print $rv->error(), "\n";
 
 	return;
@@ -1562,7 +1603,7 @@ sub run_list
 			else {
 
 				# pull objectClasses, hash for lookup speed
-				my @oc   = $e->get_value( 'objectClass' );
+				my @oc = $e->get_value( 'objectClass' );
 				my %ochash;
 				map { $ochash{$_} = 1 } @oc;
 
@@ -1605,11 +1646,15 @@ sub run_mkdir
 	my %rdn = %{ shift(@{ ldap_explode_dn($dir, casefold => 'lower') }) };
 
 	# add
-	my $r = $self->ldap()->add( $dir, attr => [
-		objectClass => [ 'top', 'organizationalUnit' ], %rdn
-	]);
+	my $mkdir = sub {
+		return $self->ldap()->add( $dir, attr => [
+			objectClass => [ 'top', 'organizationalUnit' ], %rdn
+		]);
+	};
 
-	print $r->error(), "\n";
+	my $rv = $self->with_retry( $mkdir );
+
+	print $rv->error(), "\n";
 	$self->update_entries( clearcache => 1 );
 	return;
 }
@@ -1641,12 +1686,15 @@ sub run_move
 	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\w=]+),(.*)$/;
 	$old_dn = $1 if $s_dn =~ /^[\w=]+,(.*)$/;
 
-	my $rv = $self->ldap()->moddn(
-		$s_dn,
-		newrdn	     => $d_dn,
-		deleteoldrdn => 1,
-		newsuperior  => $new_dn
-	);
+	my $moddn = sub {
+		return $self->ldap()->moddn(
+			$s_dn,
+			newrdn	     => $d_dn,
+			deleteoldrdn => 1,
+			newsuperior  => $new_dn
+		);
+	};
+	my $rv = $self->with_retry( $moddn );
 	print $rv->error(), "\n";
 
 	# clear caches
@@ -1705,7 +1753,8 @@ sub run_passwd
 
 	if ( $rv->code() == LDAP_SUCCESS ) {
 		print "Password updated successfully.\n";
-	} else {
+	}
+	else {
 		print "Password error: " . $rv->error() . "\n";
 	}
 
@@ -1751,7 +1800,7 @@ use strict;
 use warnings;
 
 $0 = 'shelldap';
-my $VERSION = '0.7';
+my $VERSION = '0.8';
 
 use Getopt::Long;
 use YAML::Syck;
