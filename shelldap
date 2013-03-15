@@ -564,17 +564,28 @@ sub ldif
 	my $self	 = shift;
 	my $use_temp = shift;
 
+	# find the terminal width
+	#
+	my $wrap = $conf->{'wrap'};
+	eval {
+		my $rows;
+		my $term = Term::ReadLine->new( 1 );
+		( $rows, $wrap ) = $term->get_screen_size() unless $wrap;
+	};
+	$wrap ||= 78;
+
 	# create tmpfile and link ldif object with it
+	#
 	if ( $use_temp ) {
 		my ( undef, $fname ) =
 		  File::Temp::tempfile( 'shelldap_XXXXXXXX', DIR => '/tmp', UNLINK => 1 );
-		$self->{'ldif'}	   = Net::LDAP::LDIF->new( $fname, 'w', sort => 1 );
+		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => $wrap );
 		$self->{'ldif_fname'} = $fname;
 	}
 
 	# ldif -> stdout
 	else {
-		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1 );
+		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1, wrap => $wrap );
 	}
 
 	return $self->{'ldif'};
