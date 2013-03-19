@@ -58,6 +58,8 @@ tasks quickly and with minimal effort.
  - Automatic reconnection attempts if the connection is lost with the
    LDAP server.
 
+ - Basic schema introspection for quick reference.
+
  - It feels like a semi-crippled shell, making LDAP browsing and editing
    at least halfway pleasurable.
 
@@ -91,6 +93,10 @@ default ~/.shelldap.rc.
 
     --configfile /tmp/alternate-config.yml
     -f /tmp/alternate-config.yml
+
+This config file overrides values found in the default config, so
+you can easily have separate config files for connecting to your
+cn=monitor or cn=log overlays (for example.)
 
 =back
 
@@ -293,7 +299,7 @@ directory.
 
 aliased to: vi
 
-=item B< env>
+=item B<env>
 
  Show values for various runtime variables.
 
@@ -307,6 +313,25 @@ The search string must be a valid LDAP filter.
     grep -r (&(uid=mahlon)(objectClass=*))
 
  aliased to: search
+
+=item B<inspect>
+
+View schema information about a given entry, or a list of arbitrary
+objectClasses, along with the most common flags for the objectClass
+attributes.
+
+    inspect uid=mahlon
+    inspect posixAccount organizationalUnit
+    inspect _schema
+
+The output is a list of found objectClasses, their schema heirarchy
+(up to 'top'), whether or not they are a structural class, and then
+a merged list of all valid attributes for the given objectClasses.
+Attributes are marked as either required or optional, and whether
+they allow multiple values or not.
+
+If you ask for the special "_schema" object, the raw server schema
+is dumped to screen.
 
 =item B<list>
 
@@ -582,28 +607,18 @@ sub ldif
 	my $self	 = shift;
 	my $use_temp = shift;
 
-	# find the terminal width
-	#
-	my $wrap = $conf->{'wrap'};
-	eval {
-		my $rows;
-		my $term = Term::ReadLine->new( 1 );
-		( $rows, $wrap ) = $term->get_screen_size() unless $wrap;
-	};
-	$wrap ||= 78;
-
 	# create tmpfile and link ldif object with it
 	#
 	if ( $use_temp ) {
 		my ( undef, $fname ) =
 		  File::Temp::tempfile( 'shelldap_XXXXXXXX', DIR => '/tmp', UNLINK => 1 );
-		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => $wrap );
+		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => $self->wrapsize );
 		$self->{'ldif_fname'} = $fname;
 	}
 
 	# ldif -> stdout
 	else {
-		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1, wrap => $wrap );
+		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1, wrap => $self->wrapsize );
 	}
 
 	return $self->{'ldif'};
@@ -640,6 +655,24 @@ sub chksum
 	close F;
 
 	return $hash;
+}
+
+
+### Find and return the current terminal width.
+###
+sub wrapsize
+{
+	my $self = shift;
+
+	my $wrap = $conf->{'wrap'};
+	eval {
+		my $rows;
+		my $term = Term::ReadLine->new( 1 );
+		( $rows, $wrap ) = $term->get_screen_size() unless $wrap;
+	};
+
+	$wrap ||= 78;
+	return $wrap;
 }
 
 
@@ -986,9 +1019,7 @@ sub debug
 sub autocomplete_cwd
 {
 	my $self = shift;
-	my $word = $_[0];
-
-	return sort @{ $self->{'cwd_entries'} };
+	return @{ $self->{'cwd_entries'} };
 }
 
 
@@ -1008,6 +1039,16 @@ sub comp_create
 {
 	my $self = shift;
 	return @{ $self->{'objectclasses'} };
+}
+
+
+### Autocomplete values: Returns all objectClasses as defined
+### by the LDAP server, along with current children DNs.
+###
+sub comp_inspect
+{
+	my $self = shift;
+	return ('_schema', @{ $self->{'objectclasses'} }, @{ $self->{'cwd_entries'} });
 }
 
 
@@ -1037,8 +1078,8 @@ sub comp_create
 		my $sub = "comp_$_";
 		*$sub   = \&autocomplete_cwd;
 	}
-	*comp_touch  = \&comp_create;
-	*comp_export = \&comp_setenv;
+	*comp_touch   = \&comp_create;
+	*comp_export  = \&comp_setenv;
 
 	# setup alias subs
 	#
@@ -1985,6 +2026,114 @@ sub run_whoami
 }
 
 
+### Show basic information for an entry (DN) or list of objectClasses.
+###
+###   structural/auxillary classes
+###   required attributes
+###   optional attributes
+###
+sub run_inspect
+{
+	my $self = shift;
+	my @ocs  = @_;
+	my $dn   = $ocs[0];
+	my ( $must_attr, $may_attr );
+
+	unless ( $dn ) {
+		print "No DN or objectClass(es) provided.\n";
+		return;
+	}
+
+	# "Magic" argument that dumps all raw schema information.
+	#
+	if ( $dn eq '_schema' ) {
+		$self->{'schema'}->dump();
+		return;
+	}
+
+	# one argument -- if it successfully resolves to a valid DN, fetch
+	# the objectClass list from it.
+	#
+	if ( scalar @ocs == 1 ) {
+		$dn = $self->base() if $dn eq '.';
+		$dn = $self->path_to_dn( $dn );
+
+		my $s = $self->search({ base => $dn, vals => 1, attrs => ['objectClass'] });
+		if ( $s->{'code'} == LDAP_SUCCESS ) {
+			my $e = ${ $s->{'entries'} }[0];
+			@ocs = $e->get_value('objectClass');
+		}
+	}
+
+	# get the complete attributes list.
+	#
+	( $must_attr, $may_attr ) = $self->fetch_attributes( \@ocs );
+	my %must = map { $_ => 1 } @{$must_attr};
+
+	# Output objectClass chains and flags.
+	#
+	print "ObjectClasses:\n";
+	foreach my $oc ( sort @ocs ) {
+		my @sups = $self->findall_supers( $oc );
+
+		my @oc_chain = ( $oc, @sups );
+		my @oc_out;
+
+		foreach my $oc ( @oc_chain ) {
+			my $oc_obj = $self->{'schema'}->objectclass( $oc );
+			next unless $oc_obj;
+
+			$oc = $oc . ' (' . 'structural' . ')' if $oc_obj->{'structural'};
+			push( @oc_out, $oc );
+		}
+
+		print "    " . join( ' --> ', @oc_out ) . "\n" if scalar @oc_out;
+	}
+
+	# Output attributes and flags.
+	#
+	print "\nAttributes:\n";
+	foreach my $attr ( sort (@{$must_attr}, @{$may_attr}) ) {
+		my @flaglist;
+		if ( $self->{'schema'}->attribute( $attr )->{'single-value'} ) {
+			push ( @flaglist, 'single-value' );
+		}
+		else {
+			push ( @flaglist, 'multivalue' );
+		}
+
+		push ( @flaglist, $must{$attr} ? 'required' : 'optional' );
+
+		my $flags = '';
+		$flags = (' (' . join( ', ', sort @flaglist ) . ')') if scalar @flaglist > 0;
+
+		printf( "    %s%s\n", $attr, $flags );
+	}
+
+	print "\n";
+	return;
+}
+
+
+### Recursively walk an objectClass heirarchy, returning an array
+### of inheritence.
+###
+sub findall_supers
+{
+	my $self = shift;
+	my $oc   = shift or return;
+	my @found;
+
+	foreach my $sup ( $self->{'schema'}->superclass($oc) ) {
+		push( @found, $sup );
+		push( @found, $self->findall_supers( $sup ) );
+	}
+
+	return @found;
+}
+
+
+
 ########################################################################
 ### M A I N
 ########################################################################
@@ -1994,7 +2143,7 @@ use strict;
 use warnings;
 
 $0 = 'shelldap';
-my $VERSION = '0.9.0';
+my $VERSION = '1.0.0';
 
 use Getopt::Long;
 use YAML::Syck;
