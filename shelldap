@@ -471,7 +471,8 @@ sub init
 	};
 
 	# gather metadata from the LDAP server
-	$self->{'root_dse'} = $self->ldap->root_dse();
+	$self->{'root_dse'} = $self->ldap->root_dse() or
+		die "Unable to retrieve LDAP server information.  (Doublecheck connection arguments.)\n";
 	$self->{'schema'} = $self->ldap->schema();
 
 	# get an initial list of all objectClasses
@@ -574,15 +575,20 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 	}
 
 	my $err = $rv->error();
+	$self->debug(
+		"Bind as " .
+		( $conf->{'binddn'} ? $conf->{'binddn'} : 'anonymous' ) .
+		" to " . $conf->{'server'} . ": $err\n"
+	);
+
 	if ( $rv->code() ) {
 		$err .= " (try the --tls flag?)" if $err =~ /confidentiality required/i;
 		die "LDAP bind error: $err\n";
 	}
 
-	# offer to cache authentication info
-	# if we enter this conditional, we have successfully 
-	# authed with the server (non anonymous), and 
-	# we haven't cached anything in the past.
+	# Offer to cache authentication info.
+	# If we enter this conditional, we have successfully authed with the server
+	# (non anonymous), and we haven't cached anything in the past.
 	#
 	if ( $conf->{'binddn'} && ! -e $conf->{'configfile'} ) {
 		print "Would you like to cache your connection information? [Yn]: ";
@@ -2038,8 +2044,8 @@ sub run_pwd
 sub run_whoami
 {
 	my $self = shift;
-	print $conf->{'binddn'} || 'anonymous bind';
-	print "\n";
+	my $msg = ( $conf->{'binddn'} || 'anonymous bind' ) . ' (' .  $conf->{'server'} . ')';
+	print "$msg\n";
 	return;
 }
 
