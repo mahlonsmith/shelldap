@@ -145,6 +145,15 @@ credentials.
 
 =back
 
+=item B<sasl>
+
+A space separated list of SASL mechanisms.  Requires the Authen::SASL
+module.
+
+    --sasl "PLAIN CRAM-MD5 GSSAPI"
+
+=back
+
 =over 4
 
 =item B<tls>
@@ -419,7 +428,6 @@ use warnings;
 use Term::ReadKey;
 use Term::Shell;
 use Digest::MD5;
-use Authen::SASL;
 use Net::LDAP qw/
 	LDAP_SUCCESS
 	LDAP_SERVER_DOWN
@@ -562,23 +570,39 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		}
 	}
 
-	my $sasl;
-	my $sasl_conn;
-	if ($conf->{'mech'}) {
+	eval 'use Authen::SASL';
+	my ( $sasl, $sasl_conn );
+	my $has_sasl = ! defined( $@ );
+
+	if ( $has_sasl && $conf->{'sasl'} ) {
 		my $serv = $conf->{'server'};
 		$serv =~ s!^ldap[si]?://!!;
-		$sasl = Authen::SASL->new(mechanism=>$conf->{'mech'});
+		$sasl = Authen::SASL->new( mechanism => $conf->{'sasl'} );
 		$sasl_conn = $sasl->client_new('ldap', $serv);
 	}
 	
-	# bind as an authenicated dn
-	if ( $conf->{'binddn'} ) {
+	# bind with sasl
+	#
+	if ( $has_sasl && $sasl_conn ) {
 		$rv = $ldap->bind(
 			$conf->{'binddn'},
 			password => $conf->{'bindpass'},
-			sasl => $sasl_conn);
+			sasl => $sasl_conn
+		);
+	}
+
+	# simple bind as an authenticated dn
+	#
+	elsif ( $conf->{'binddn'} ) {
+		$rv = $ldap->bind(
+			$conf->{'binddn'},
+			password => $conf->{'bindpass'}
+		);
+	}
+
 	# bind anonymously
-	} else {
+	#
+	else {
 		$rv = $ldap->bind(sasl => $sasl_conn);
 	}
 
@@ -2197,7 +2221,7 @@ Getopt::Long::GetOptions(
 	'cacheage=i',
 	'promptpass|W',
 	'timeout=i',
-        'mech|Y=s',
+	'sasl|Y=s',
 	'tls_cacert=s',
 	'tls_cert=s',
 	'tls_key=s',
