@@ -1290,7 +1290,7 @@ sub run_copy
 	# see if we're copying the entry to a nonexistent path
 	#
 	my ( $new_dn, $old_dn );
-	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\w=]+),(.*)$/;
+	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\-\w=]+),(.*)$/;
 	if ( $new_dn ) { # absolute
 		unless ( $self->is_valid_dn( $new_dn ) ) {
 			print "Invalid destination.\n";
@@ -1300,7 +1300,7 @@ sub run_copy
 	else { # relative
 		$new_dn = $self->base();
 	}
-	$old_dn = $1 if $s_dn =~ /^[\w=]+,(.*)$/;
+	$old_dn = $1 if $s_dn =~ /^[\-\w=]+,(.*)$/;
 
 	# get the source entry object
 	my $e = ${ $s->{'entries'} }[0];
@@ -1314,7 +1314,7 @@ sub run_copy
 	# perhaps there is a better way to do this...?
 	#
 	my ( $uniqkey, $uniqval ) = ( $1, $2 )
-	  if $d_dn =~ /^([\.\w\-]+)(?:\s+)?=(?:\s+)?([\.\-\s\w]+),?/;
+	  if $d_dn =~ /^([\-\.\w]+)(?:\s+)?=(?:\s+)?([\-\.\s\w]+),?/;
 	unless ( $uniqkey && $uniqval ) {
 		print "Unable to parse unique values from RDN.\n";
 		return;
@@ -1948,8 +1948,8 @@ sub run_move
 
 	# see if we're moving the entry to a totally new path
 	my ( $new_dn, $old_dn );
-	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\w=]+),(.*)$/;
-	$old_dn = $1 if $s_dn =~ /^[\w=]+,(.*)$/;
+	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\-\w=]+),(.*)$/;
+	$old_dn = $1 if $s_dn =~ /^[\-\w=]+,(.*)$/;
 
 	my $moddn = sub {
 		return $self->ldap()->moddn(
