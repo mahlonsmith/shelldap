@@ -145,6 +145,8 @@ credentials.
 
 =back
 
+=over 4
+
 =item B<sasl>
 
 A space separated list of SASL mechanisms.  Requires the Authen::SASL
@@ -2200,7 +2202,7 @@ use strict;
 use warnings;
 
 $0 = 'shelldap';
-my $VERSION = '1.1.0';
+my $VERSION = '1.1.1';
 
 use Getopt::Long;
 use YAML::Syck;
