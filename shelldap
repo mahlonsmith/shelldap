@@ -291,10 +291,12 @@ aliased to: touch
 =item B<delete>
 
 Remove an entry from the directory.  Globbing is supported.
-All deletes are sanity-prompted.
+All deletes are sanity-prompted.  The -v flag prints the entries out
+for review before delete.
 
     delete uid=mahlon
     delete uid=ma*
+    rm -v uid=mahlon,ou=People,dc=example,o=company l=office
 
 aliased to: rm
 
@@ -399,6 +401,8 @@ Modify various runtime variables normally set from the command line.
 
 Show current auth credentials.  Unless you specified a binddn, this
 will just show an anonymous bind.
+
+aliased to: id
 
 =back
 
@@ -1450,31 +1454,76 @@ sub run_create
 sub run_delete
 {
 	my $self = shift;
-	my @DNs  = @_;
+	my @args  = @_;
+	my @matches;
+	my $s;
+	my $verbose;
 
-	unless ( scalar @DNs ) {
+	unless ( scalar @args ) {
 		print "No dn specified.\n";
 		return;
 	}
 
-	my $filter;
-	unless ( $DNs[0] eq '*' ) {
-		$filter = $self->make_filter( \@DNs ) or return;
+	# Flags.
+	#
+	if ( $args[0] =~ /^\-v/ ) {
+		$verbose = 1;
+		shift @args;
+	}
+	
+	# Separate real args from filter arguments.
+	#
+	foreach my $dn ( @args ) {
+		if ( $dn eq '*' ) {
+			$s = $self->search({ scope => 'one' });
+			map { push @matches, $_ } @{ $s->{'entries'} } if $s->{'code'} == LDAP_SUCCESS;
+		}
+
+		# Search by filter
+		#
+		else {
+
+			my $filter = $self->make_filter( [$dn] ) or next;
+			$s = $self->search({ scope => 'one', filter => $filter });
+			if ( scalar @{$s->{'entries'}} != 0 ) {
+				map { push @matches, $_ } @{ $s->{'entries'} } if $s->{'code'} == LDAP_SUCCESS;
+			}
+
+			# Search by exact DN.
+			#
+			else {
+				$dn = $self->path_to_dn( $dn );
+				$s = $self->search({ base => $dn, vals => 0 });
+				my $e = ${ $s->{'entries'} }[0];
+				push @matches, $e if $s->{'code'} == LDAP_SUCCESS;
+			}
+		}
 	}
 
-	my $s = $self->search({ scope => 'one', filter => $filter });
-	unless ( $s->{'code'} == LDAP_SUCCESS ) {
-		print "$s->{'message'}\n";
+	# Unique the matchset for a consistent count, keyed by DN.
+	#
+	my @uniq_matches = keys %{{ map { $_->dn => 1 } @matches }};
+
+	my $mcount = scalar @uniq_matches;
+	if ( $mcount == 0 ) {
+		print "Nothing matched.\n";
 		return;
 	}
 
-	print "Are you sure? [Ny]: ";
+	if ( $verbose ) {
+		print "* $_\n" foreach @uniq_matches;
+	}
+
+	print "About to remove $mcount item(s).  Are you sure? [Ny]: ";
 	chomp( my $resp = <STDIN> );
 	return unless $resp =~ /^y/i;
-   
-	foreach my $e ( @{ $s->{'entries'} } ) {
+
+	my %seen;
+	foreach my $e ( @matches ) {
 		my $dn = $e->dn();
+		next if $seen{ $dn };
 		my $rv = $self->ldap->delete( $dn );
+		$seen{ $dn }++;
 		print "$dn: ", $rv->error(), "\n";
 	}
    
@@ -1538,7 +1587,6 @@ sub run_edit
 		}
 		close LDIF;
 	}
-
 	# checksum it, then open it in an editor
 	#
 	my $hash_orig = $self->chksum( $self->{'ldif_fname'} );
