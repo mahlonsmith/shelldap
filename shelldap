@@ -145,6 +145,8 @@ credentials.
 
 =back
 
+=over 4
+
 =item B<sasl>
 
 A space separated list of SASL mechanisms.  Requires the Authen::SASL
@@ -655,7 +657,7 @@ sub ldif
 	if ( $use_temp ) {
 		my ( undef, $fname ) =
 		  File::Temp::tempfile( 'shelldap_XXXXXXXX', SUFFIX => '.ldif', DIR => '/tmp', UNLINK => 1 );
-		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => 0 )
+		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => 0 );
 		$self->{'ldif_fname'} = $fname;
 	}
 
@@ -1587,6 +1589,7 @@ sub run_edit
 		}
 		close LDIF;
 	}
+
 	# checksum it, then open it in an editor
 	#
 	my $hash_orig = $self->chksum( $self->{'ldif_fname'} );
