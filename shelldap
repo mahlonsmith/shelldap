@@ -239,6 +239,10 @@ add a list of attributes to display.  Use '+' for server side attributes.
     cat uid=mahlon,ou=People,dc=example,o=company
     cat uid=mahlon + userPassword
 
+=item B< less>
+
+Like cat, but uses the configured pager to display output.
+
 =item B<  cd>
 
 Change directory.  Translated to LDAP, this changes the current basedn.
@@ -472,6 +476,7 @@ sub init
 	$self->{'API'}->{'match_uniq'} = 0;
 
 	$self->{'editor'} = $conf->{'editor'} || $ENV{'EDITOR'} || 'vi';
+	$self->{'pager'} = $conf->{'pager'} || $ENV{'PAGER'} || 'less';
 	$self->{'env'}	= [ qw/ debug cacheage timeout / ];
 
 	# let autocomplete work with the '=' character
@@ -1113,6 +1118,7 @@ sub comp_inspect
 		copy   => 'cp',
 		cat    => 'read',
 		move   => 'mv',
+		less   => undef,
 		cd     => undef,
 		passwd => undef
 	);
@@ -1196,6 +1202,24 @@ sub run_cat
 	my $dn    = shift;
 	my @attrs = (@_) ? @_ : ('*');
 
+	display($self, $dn, \@attrs, 0);
+}
+
+sub run_less
+{
+	my $self  = shift;
+	my $dn    = shift;
+	my @attrs = (@_) ? @_ : ('*');
+
+	display($self, $dn, \@attrs, 1);
+}
+
+sub display{
+	my $self  = shift;
+	my $dn    = shift;
+	my @attrs = @{;shift};
+	my $use_pager = shift;
+
 	unless ( $dn ) {
 		print "No dn provided.\n";
 		return;
@@ -1241,13 +1265,16 @@ sub run_cat
 		return;
 	}
 
-	# display to stdout
+	# display to stdout or pager
 	#
+	my $ldif = $self->ldif($use_pager);
 	foreach my $e ( @{ $s->{'entries'} } ) {
-		$self->ldif->write_entry( $e );
-		print "\n";
+		$ldif->write_entry( $e );
 	}
-
+	if($use_pager) {
+		system( $self->{'pager'}, $self->{'ldif_fname'} );
+		unlink $self->{'ldif_fname'};
+	}	
 	return;
 }
 
