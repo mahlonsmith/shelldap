@@ -864,7 +864,7 @@ sub display
 	foreach my $e ( @{ $s->{'entries'} } ) {
 		$ldif->write_entry( $e );
 	}
-	if( $use_pager ) {
+	if ( $use_pager ) {
 		system( $self->{'pager'}, $self->{'ldif_fname'} );
 		unlink $self->{'ldif_fname'};
 	}	
@@ -2083,8 +2083,8 @@ sub run_move
 
 	# see if we're moving the entry to a totally new path
 	my ( $new_dn, $old_dn );
-	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\-\w=]+),(.*)$/;
-	$old_dn = $1 if $s_dn =~ /^[\-\w=]+,(.*)$/;
+	( $d_dn, $new_dn ) = ( $1, $2 ) if $d_dn =~ /^([\.\-\w=]+),(.*)$/;
+	$old_dn = $1 if $s_dn =~ /^[\.\-\w=]+,(.*)$/;
 
 	my $moddn = sub {
 		return $self->ldap()->moddn(
