@@ -1628,7 +1628,10 @@ sub run_edit
 	# checksum it, then open it in an editor
 	#
 	my $hash_orig = $self->chksum( $self->{'ldif_fname'} );
-	system( $self->{'editor'}, $self->{'ldif_fname'} ) &&
+	my @edit_args = split(' ',$self->{'editor'});
+	push(@edit_args,$self->{'ldif_fname'});
+	#	system( $self->{'editor'}, $self->{'ldif_fname'} ) &&
+	system( @edit_args ) &&
 		die "Unable to launch editor: $!\n";
 
 	# detect a total lack of change
