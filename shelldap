@@ -1238,6 +1238,113 @@ sub unwrap_line {
 }
 
 
+### Given an LDAP Entry object $e, an array reference to it's LDIF original
+### content, and another array reference to updated LDIF content, run an LCS
+### comparison, modifying the Entry object in place.
+### 
+sub diff {
+	my $self = shift;
+	my $e    = shift;
+	my $orig = shift;
+	my $new  = shift;
+
+	$self->unwrap_line( $orig );
+	$self->unwrap_line( $new );
+
+	# parser subref
+	#
+	my $parse = sub {
+		my $line = shift || $_;
+		return if $line	 =~ /^\#/; # ignore comments
+		my ( $attr, $val ) = ( $1, $2 ) if $line =~ /^(.+?): (.*)$/;
+		return unless $attr;
+		return if index($attr, ':') != -1;  # ignore base64
+		return ( $attr, $val );
+	};
+
+	my $diff = Algorithm::Diff->new( $orig, $new );
+	HUNK:
+	while ( $diff->Next() ) {
+		next if $diff->Same();
+		my $diff_bit = $diff->Diff();
+		my %seen_attr;
+
+		# attr removal hunk
+		#
+		if ( $diff_bit == 1 ) {
+			foreach ( $diff->Items(1) ) {
+				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("DELETE: $_");
+				$e->delete( $attr => [ $val ] );
+			}
+		}
+
+		# attr insertion hunk
+		#
+		if ( $diff_bit == 2 ) {
+			foreach ( $diff->Items(2) ) {
+				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("INSERT: $_");
+				$e->add( $attr => $val );
+			}
+		}
+
+		# attr change hunk
+		#
+		if ( $diff_bit == 3 ) {
+
+			# modification to existing line
+			#
+			foreach ( $diff->Items(2) ) {
+				my ( $attr, $val ) = $parse->( $_ ) or next;
+				$self->debug("MODIFY: $_");
+
+				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
+				my $cur_valcount = scalar @$cur_vals;
+				next if $cur_valcount == 0; # should have been an 'add'
+
+				# replace immediately 
+				#
+				if ( $cur_valcount == 1 ) {
+					$e->replace( $attr => $val );
+				}
+				else {
+
+					# retain attributes that allow multiples, so updating
+					# one attribute doesn't inadvertently remove others with
+					# the same name.
+					#
+					next if $seen_attr{ $attr };
+					my @new_vals;
+					foreach my $line ( @$new ) {
+						my ( $new_attr, $new_val ) = $parse->( $line ) or next;
+						next unless $new_attr eq $attr;
+						$seen_attr{ $attr }++;
+						push @new_vals, $new_val;
+					}
+
+					$e->replace( $attr => \@new_vals );
+				}
+			}
+
+			# deletion within the same hunk
+			#
+			foreach ( $diff->Items(1) ) {
+				my ( $attr, $val ) = $parse->( $_ ) or next;
+				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
+				my $cur_valcount = scalar @$cur_vals;
+
+				next if $cur_valcount == 1;
+				next if $seen_attr{ $attr };
+				$self->debug("DELETE: $_");
+				$e->delete( $attr => [ $val ] );
+			}
+		}
+	}
+}
+
+
+
 ########################################################################
 ### S H E L L   M E T H O D S
 ########################################################################
@@ -1628,11 +1735,9 @@ sub run_edit
 	# checksum it, then open it in an editor
 	#
 	my $hash_orig = $self->chksum( $self->{'ldif_fname'} );
-	my @edit_args = split(' ',$self->{'editor'});
-	push(@edit_args,$self->{'ldif_fname'});
-	#	system( $self->{'editor'}, $self->{'ldif_fname'} ) &&
-	system( @edit_args ) &&
-		die "Unable to launch editor: $!\n";
+	my @edit_args = split /\s+/, $self->{'editor'};
+	push @edit_args, $self->{'ldif_fname'};
+	system( @edit_args ) && die "Unable to launch editor: $!\n";
 
 	# detect a total lack of change
 	#
@@ -1663,99 +1768,7 @@ sub run_edit
 	my @new_ldif = <LDIF>;
 	close LDIF;
 
-	# parser subref
-	#
-	my $parse = sub {
-		my $line = shift || $_;
-		return if $line	 =~ /^\#/; # ignore comments
-		my ( $attr, $val ) = ( $1, $2 ) if $line =~ /^(.+?): (.*)$/;
-		return unless $attr;
-		return if index($attr, ':') != -1;  # ignore base64
-		return ( $attr, $val );
-	};
-
-	$self->unwrap_line( \@orig_ldif );
-	$self->unwrap_line( \@new_ldif );
-
-	my $diff = Algorithm::Diff->new( \@orig_ldif, \@new_ldif );
-	HUNK:
-	while ( $diff->Next() ) {
-		next if $diff->Same();
-		my $diff_bit = $diff->Diff();
-		my %seen_attr;
-
-		# attr removal hunk
-		#
-		if ( $diff_bit == 1 ) {
-			foreach ( $diff->Items(1) ) {
-				my ( $attr, $val ) = $parse->( $_ ) or next;
-				$self->debug("DELETE: $_");
-				$e->delete( $attr => [ $val ] );
-			}
-		}
-
-		# attr insertion hunk
-		#
-		if ( $diff_bit == 2 ) {
-			foreach ( $diff->Items(2) ) {
-				my ( $attr, $val ) = $parse->( $_ ) or next;
-				$self->debug("INSERT: $_");
-				$e->add( $attr => $val );
-			}
-		}
-
-		# attr change hunk
-		#
-		if ( $diff_bit == 3 ) {
-
-			# modification to existing line
-			#
-			foreach ( $diff->Items(2) ) {
-				my ( $attr, $val ) = $parse->( $_ ) or next;
-				$self->debug("MODIFY: $_");
-
-				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
-				my $cur_valcount = scalar @$cur_vals;
-				next if $cur_valcount == 0; # should have been an 'add'
-
-				# replace immediately 
-				#
-				if ( $cur_valcount == 1 ) {
-					$e->replace( $attr => $val );
-				}
-				else {
-
-					# retain attributes that allow multiples, so updating
-					# one attribute doesn't inadvertently remove others with
-					# the same name.
-					#
-					next if $seen_attr{ $attr };
-					my @new_vals;
-					foreach my $line ( @new_ldif ) {
-						my ( $new_attr, $new_val ) = $parse->( $line ) or next;
-						next unless $new_attr eq $attr;
-						$seen_attr{ $attr }++;
-						push @new_vals, $new_val;
-					}
-
-					$e->replace( $attr => \@new_vals );
-				}
-			}
-
-			# deletion within the same hunk
-			#
-			foreach ( $diff->Items(1) ) {
-				my ( $attr, $val ) = $parse->( $_ ) or next;
-				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
-				my $cur_valcount = scalar @$cur_vals;
-
-				next if $cur_valcount == 1;
-				next if $seen_attr{ $attr };
-				$self->debug("DELETE: $_");
-				$e->delete( $attr => [ $val ] );
-			}
-		}
-	}
+	$self->diff( $e, \@orig_ldif, \@new_ldif );
 
 	my $update = sub { return $e->update( $self->ldap ); };
 	my $rv = $self->with_retry( $update );
