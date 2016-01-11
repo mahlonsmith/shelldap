@@ -581,32 +581,33 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		}
 	}
 
-	eval 'use Authen::SASL';
+	undef $@; eval 'use Authen::SASL';
 	my ( $sasl, $sasl_conn );
-	my $has_sasl = ! defined( $@ );
+	my $has_sasl = ! $@;
+	my $use_sasl = $has_sasl && $conf->{'sasl'};
 
-	if ( $has_sasl && $conf->{'sasl'} ) {
+	die "SASL requested, but library is not installed.  Please install Authen::SASL and try again.\n" if $conf->{'sasl'} && ! $has_sasl;
+
+	if ( $use_sasl ) {
 		my $serv = $conf->{'server'};
 		$serv =~ s!^ldap[si]?://!!;
 		$sasl = Authen::SASL->new( mechanism => $conf->{'sasl'} );
-		$sasl_conn = $sasl->client_new('ldap', $serv);
+		$sasl_conn = $sasl->client_new( 'ldap', $serv );
 	}
-	
+
 	# bind with sasl
 	#
-	if ( $has_sasl && $sasl_conn ) {
-		$rv = $ldap->bind(
-			$conf->{'binddn'},
+	if ( $sasl_conn ) {
+		$rv = $ldap->bind( $conf->{'binddn'},
 			password => $conf->{'bindpass'},
-			sasl => $sasl_conn
+			sasl     => $sasl_conn
 		);
 	}
 
 	# simple bind as an authenticated dn
 	#
 	elsif ( $conf->{'binddn'} ) {
-		$rv = $ldap->bind(
-			$conf->{'binddn'},
+		$rv = $ldap->bind( $conf->{'binddn'},
 			password => $conf->{'bindpass'}
 		);
 	}
@@ -614,19 +615,19 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 	# bind anonymously
 	#
 	else {
-		$rv = $ldap->bind(sasl => $sasl_conn);
+		$rv = $sasl_conn ? $ldap->bind( sasl => $sasl_conn ) : $ldap->bind();
 	}
 
 	my $err = $rv->error();
 	$self->debug(
 		"Bind as " .
-		( $conf->{'binddn'} ? $conf->{'binddn'} : 'anonymous' ) .
-		" to " . $conf->{'server'} . ": $err\n"
+			( $conf->{'binddn'} ? $conf->{'binddn'} : 'anonymous' ) .
+			" to " . $conf->{'server'} . ": $err\n"
 	);
 
 	if ( $rv->code() ) {
 		$err .= " (try the --tls flag?)" if $err =~ /confidentiality required/i;
-		$err .= "\n" . $sasl->error() if $sasl;
+		$err .= "\n" . $sasl->error if $sasl_conn && defined( $sasl->error );
 		die "LDAP bind error: $err\n";
 	}
 
