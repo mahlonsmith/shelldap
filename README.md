@@ -78,6 +78,7 @@ Additional functionality is supported with the presence of:
 
 * IO::Socket::SSL
 * Authen::SASL
+* Term::ReadLine::Gnu
 
 
 Development
