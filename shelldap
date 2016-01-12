@@ -539,7 +539,7 @@ sub ldap
 	# not installed and Net::LDAP decides it is required.
 	#
 	if ( $conf->{'tls'} || $conf->{'server'} =~ m|ldaps://| ) {
-		eval 'use IO::Socket::SSL';
+		eval { require IO::Socket::SSL; };
 		die qq{IO::Socket::SSL not installed, but is required for SSL or TLS connections.
 You may try connecting insecurely, or install the module and try again.\n} if $@;
 	}
@@ -581,7 +581,7 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		}
 	}
 
-	undef $@; eval 'use Authen::SASL';
+	undef $@; eval { require Authen::SASL; };
 	my ( $sasl, $sasl_conn );
 	my $has_sasl = ! $@;
 	my $use_sasl = $has_sasl && $conf->{'sasl'};
@@ -2308,7 +2308,7 @@ my $VERSION = '1.3.1';
 use Getopt::Long;
 use YAML::Syck;
 use Pod::Usage;
-eval 'use Term::ReadLine::Gnu';
+eval { require Term::ReadLine::Gnu; };
 warn qq{Term::ReadLine::Gnu not installed.
 Continuing, but shelldap is of limited usefulness without it.\n\n} if $@;
 
