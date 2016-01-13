@@ -1,0 +1,157 @@
+2016-01-12  v1.3.2
+
+	* Don't test for optional perl modules by string eval().
+
+	* Migration to BitBucket for issue tracking and downloads.
+	  Primary repository is still (and will continue to be) martini.nu.
+
+	* Fix anonymous binds when SASL is not used.
+
+	* Allow the period character when moving an entry by DN.
+
+	* Allow editor arguments in your .shelldap.rc or EDITOR environment
+	  variable when editing files externally.
+
+
+2015-03-04  v1.3.1
+
+	* Use the system definied tempdir instead of hardcoding /tmp.
+
+
+2014-12-04  v1.3.0
+
+	* Add a 'less' command, that does the same as cat, but uses a pager.
+
+
+2014-08-11  v.1.2.0
+
+	* Disable LDIF line wrapping when writing -to- temporary files.
+
+	* Add 'rm' for a fully qualified DN, instead of only working with RDN.
+
+
+2014-06-23  v1.1.1
+
+	* Fix pod documentation so it can build without complaint under perl 5.20.
+
+
+2014-06-21  v.1.1.0
+
+	* Add CONTRIBUTORS file.
+	
+	* Add simple (optional) SASL support.
+
+	* Fix the DN regexp to include dashes.
+
+
+2013-05-15  v1.0.2
+
+	* Automatically use ldif syntax highlighting for editors that understand LDIF.
+
+	* Catch a case where the LDAP object is defined, but in a state that
+	  schema/root_dse are not obtainable. Add the connected server to
+	  'id/whoami' output.
+
+	* Fix another LCS edge case.
+
+
+2013-04-18  v1.0.1
+
+	* Fix for edge case Diff::LCS traversals. 
+	* Ensure re-edit state is cleared in between attempts.
+
+
+2013-03-19  v1.0.0
+
+	* Add the "inspect" command, which provides some quick reference for
+	  server schema objectClasses and attributes.
+
+	* Add a command line option (-f) to specify an alternate configuration file.
+
+	* Allow setting the $editor from the config file.
+
+	* Offer to re-enter the editor if there is an error during create or
+	  edit, so changes aren't lost.
+
+	* Change the version number to reflect semantic versioning (http://semver.org).
+
+	* Alter the default wrap width for LDIF to expand to the terminal
+	  size, with an optional rc file override.
+
+	* More robust path for connection retries. Show optional, unused
+	  attributes as comments in the editor.
+
+
+2013-01-08  v0.7
+
+	* Attempt to retry the operation on failure.
+
+	* Add a flag to force a password prompt, so you can override
+	  credentials from your cached shelldap.rc.
+
+	* Make the behaviour of cd, edit and mkdir similar to cat and
+	  delete/rm and fail if some RDN's in the argument contain spaces
+	  without beeing quoted.
+
+
+2011-09-06  v0.5
+
+	* Backout the additional objectClasses patch for mkdir: same behavior
+	  can be acheived with 'touch', less complex to leave it as is.
+
+	* Add a --version flag.
+
+	* Add better verbosity when saving connection cache data.
+
+	* Make sure the hasSubordinates attribute is defined before checking its value.
+
+	* Fix 'ls -R' output.
+
+	* Repair broken path behavior, remove unneeded #path_to_dn 'relative' flag.
+
+	* Add method path_to_dn() to convert a given "path" to a DN
+
+	* mkdir: support more objectclasses
+
+	* make_filter: cope with filters that are already parenthesized
+
+	* cd: flexible treatment of repeated '..', even as prefix
+
+	* base(): make more secure, allow '' as DN
+
+	* Added documentation for the additional short flags.
+
+	* Accept short option names for some options
+
+	* use symbolic LDAP error codes instead of numbers
+
+	* Exit with a nicer error message if IO::Socket::SSL isn't installed.
+
+	* Allow '-' on RDN name when copying
+
+
+2011-02-17  v0.4
+
+	* Follow regular man page conventions.
+
+	* Improve performance for cd/ls for containers with a large number of entries.
+
+
+2011-02-17  v0.3
+
+	* Update documentation, now that multiline edits work. Minor other cleanups.
+
+	* Combine multiple lines into a single one before displaying LDIF.
+
+	* Append a trailing slash to entries that contain other entries.
+
+	* Add options to support ssl key verification when connecting with TLS.
+
+	* Display correct configuration file in error message, if a YAML parse error occurrs.
+
+
+2008-12-04  v0.2
+
+	* Start using a repository.  :-)
+
+
