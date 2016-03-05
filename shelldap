@@ -341,7 +341,7 @@ attributes.
     inspect posixAccount organizationalUnit
     inspect _schema
 
-The output is a list of found objectClasses, their schema heirarchy
+The output is a list of found objectClasses, their schema hierarchy
 (up to 'top'), whether or not they are a structural class, and then
 a merged list of all valid attributes for the given objectClasses.
 Attributes are marked as either required or optional, and whether
@@ -2275,7 +2275,7 @@ sub run_inspect
 }
 
 
-### Recursively walk an objectClass heirarchy, returning an array
+### Recursively walk an objectClass hierarchy, returning an array
 ### of inheritence.
 ###
 sub findall_supers
