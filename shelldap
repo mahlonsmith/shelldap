@@ -461,6 +461,7 @@ use Net::LDAP qw/
 	LDAP_OTHER
 	LDAP_TIMEOUT
 	LDAP_NO_MEMORY
+	LDAP_EXTENSION_PASSWORD_MODIFY
 	LDAP_CONNECT_ERROR
 	LDAP_CONTROL_PAGED /;
 use Net::LDAP::Util qw/ canonical_dn ldap_explode_dn /;
@@ -472,6 +473,7 @@ use File::Temp;
 use Algorithm::Diff;
 use Carp 'confess';
 use base 'Term::Shell';
+
 
 my $conf = $main::conf;
 
@@ -526,8 +528,9 @@ sub init
 	# check for the pagination extension on the server early, and bail
 	# if necessary.
 	if ( $conf->{'paginate'} && $conf->{'paginate'} =~ /^\d+$/ && $conf->{'paginate'} > 0 ) {
-		my $has_pagination = ( grep $_ eq LDAP_CONTROL_PAGED, $self->{'root_dse'}->get_value('supportedControl') );
-		die "Server pagination is enabled, but the server doesn't seem to support it.\n" unless $has_pagination;
+		unless ( $self->{'root_dse'}->supported_control(LDAP_CONTROL_PAGED) ) {
+			die "Server pagination is enabled, but the server doesn't seem to support it.\n";
+		}
 	}
 	else {
 		$conf->{'paginate'} = undef;
@@ -2171,8 +2174,7 @@ sub run_passwd
 
 	$self->{'root_dse'} ||= $self->ldap->root_dse();
 
-	my $pw_extension = '1.3.6.1.4.1.4203.1.11.1';
-	unless ( $self->{'root_dse'}->supported_extension( $pw_extension ) ) {
+	unless ( $self->{'root_dse'}->supported_extension(LDAP_EXTENSION_PASSWORD_MODIFY) ) {
 		print "Sorry, password changes not supported by LDAP server.\n";
 		return;
 	}
