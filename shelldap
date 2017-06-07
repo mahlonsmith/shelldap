@@ -138,6 +138,19 @@ try and ask the server for a sane default.
 
 =over 4
 
+=item B<paginate>
+
+Integer.  If enabled, shelldap will attempt to use server side
+pagination to build listings.  Note: if you're using this to avoid
+sizelimit errors, you'll likely need server configuration to raise the
+limits for paginated results.
+
+	--paginate 100
+
+=back
+
+=over 4
+
 =item B<promptpass>
 
 Force password prompting.  Useful to temporarily override cached
@@ -448,15 +461,17 @@ use Net::LDAP qw/
 	LDAP_OTHER
 	LDAP_TIMEOUT
 	LDAP_NO_MEMORY
-	LDAP_CONNECT_ERROR /;
+	LDAP_CONNECT_ERROR
+	LDAP_CONTROL_PAGED /;
 use Net::LDAP::Util qw/ canonical_dn ldap_explode_dn /;
 use Net::LDAP::LDIF;
+use Net::LDAP::Extension::SetPassword;
+use Net::LDAP::Control::Paged;
 use Data::Dumper;
 use File::Temp;
 use Algorithm::Diff;
 use Carp 'confess';
 use base 'Term::Shell';
-require Net::LDAP::Extension::SetPassword;
 
 my $conf = $main::conf;
 
@@ -506,6 +521,16 @@ sub init
 		print "Connected to $conf->{'server'}\n";
 		print "Supported LDAP version: ", ( join ', ', @versions ), "\n";
 		print "Cipher in use: ", $self->ldap()->cipher(), "\n";
+	}
+
+	# check for the pagination extension on the server early, and bail
+	# if necessary.
+	if ( $conf->{'paginate'} && $conf->{'paginate'} =~ /^\d+$/ && $conf->{'paginate'} > 0 ) {
+		my $has_pagination = ( grep $_ eq LDAP_CONTROL_PAGED, $self->{'root_dse'}->get_value('supportedControl') );
+		die "Server pagination is enabled, but the server doesn't seem to support it.\n" unless $has_pagination;
+	}
+	else {
+		$conf->{'paginate'} = undef;
 	}
 
 	# try an initial search and bail early if it doesn't work. (bad baseDN?)
@@ -873,7 +898,8 @@ sub display
 }
 
 
-### Perform an LDAP search.
+### Perform an LDAP search, optionally with the server side pager
+### control.
 ###
 ### Returns a hashref containing the return code and
 ### an arrayref of Net::LDAP::Entry objects.
@@ -882,10 +908,17 @@ sub search
 {
 	my $self = shift;
 	my $opts = shift || {};
+	my $controls = [];
 
 	$opts->{'base'}   ||= $self->base(),
 	$opts->{'filter'} ||= '(objectClass=*)';
 	$opts->{'scope'}  ||= 'base';
+
+	my $pager;
+	if ( $conf->{'paginate'} ) {
+		$pager = Net::LDAP::Control::Paged->new( size => $conf->{'paginate'} );
+		push( @$controls, $pager );
+	}
 
 	my $search = sub { 
 		return $self->ldap->search(
@@ -894,19 +927,41 @@ sub search
 			scope	  => $opts->{'scope'},
 			timelimit => $conf->{'timeout'},
 			typesonly => ! $opts->{'vals'},
-			attrs	  => $opts->{'attrs'} || ['*']
+			attrs	  => $opts->{'attrs'} || ['*'],
+			control   => $controls
 		);
 	};
 
-	my $s = $self->with_retry( $search );
+	my $s;
+	my $entries = [];
+   	my $token  = '-';
+
+	if ( $conf->{'paginate'} ) {
+		while( $token ) {
+			$s = $self->with_retry( $search );
+			push( @$entries, $s->entries() );
+
+			my $page_response = $s->control( LDAP_CONTROL_PAGED ) or last;
+			$token = $page_response->cookie;
+			$pager->cookie( $token );
+		}
+	}
+	else {
+		$s = $self->with_retry( $search );
+		$entries = [ $s->entries() ];
+	}
+
 	my $rv = {
 		code	=> $s->code(),
-		message => $s->error(),
-		entries => []
+		message => $s->error()
 	};
 
-	$rv->{'entries'} =
-	  $opts->{'scope'} eq 'base' ? [ $s->shift_entry() ] : [ $s->entries() ];
+	if ( $opts->{'scope'} eq 'base' ) {
+		$rv->{'entries'} = [ $s->shift_entry() ]
+	}
+	else {
+		$rv->{'entries'} = $entries;
+	}
 
 	return $rv;
 }
@@ -2322,6 +2377,7 @@ Getopt::Long::GetOptions(
 	'binddn|D=s',
 	'basedn|b=s',
 	'cacheage=i',
+	'paginate=i',
 	'promptpass|W',
 	'timeout=i',
 	'sasl|Y=s',
@@ -2349,7 +2405,6 @@ if ( $conf->{'configfile'} ) {
 	my $more_conf = load_config( $conf->{'configfile'} );
 	while ( my ($k, $v) = each %{$conf} ) { $conf->{ $k } = $v }
 }
-
 
 # defaults
 $conf->{'configfile'} ||= "$ENV{'HOME'}/.shelldap.rc";
