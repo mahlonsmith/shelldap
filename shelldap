@@ -2408,6 +2408,7 @@ if ( $conf->{'configfile'} ) {
 	while ( my ($k, $v) = each %{$conf} ) { $conf->{ $k } = $v }
 }
 
+
 # defaults
 $conf->{'configfile'} ||= "$ENV{'HOME'}/.shelldap.rc";
 $conf->{'cacheage'} ||= 300;
