@@ -56,7 +56,7 @@ You can download the latest script [here](http://code.martini.nu/shelldap/archiv
 It is also available via the 
 [FreeBSD ports](http://www.freebsd.org/cgi/cvsweb.cgi/ports/net/shelldap/) system, OS X via 
 [macports](https://trac.macports.org/browser/trunk/dports/net/shelldap/Portfile), Debian/Ubuntu via [apt](https://packages.debian.org/shelldap),
-NetBSD's [pkgsrc](ftp://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc/sysutils/shelldap/README.html), OpenBSD [ports](http://openports.se/sysutils/shelldap), and openSUSE's [build service](http://software.opensuse.org/search?q=shelldap&baseproject=openSUSE%3AFactory&lang=en).
+NetBSD's [pkgsrc](ftp://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc/sysutils/shelldap/README.html), OpenBSD [ports](http://openports.se/sysutils/shelldap), openSUSE's [build service](http://software.opensuse.org/search?q=shelldap&baseproject=openSUSE%3AFactory&lang=en), and as a Fedora [RPM](https://src.fedoraproject.org/rpms/shelldap).
 
 Many thanks to the maintainers of these packages.
 
