@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # vim: set nosta noet ts=4 sw=4:
 #
-# Copyright (c) 2006-2015, Mahlon E. Smith <mahlon@martini.nu>
+# Copyright (c) 2006-2019, Mahlon E. Smith <mahlon@martini.nu>
 # All rights reserved.
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -686,19 +686,21 @@ sub ldif
 	my $self	 = shift;
 	my $use_temp = shift;
 
+	my $raw = qr/(^jpegPhoto|;binary)/;
+
 	# create tmpfile and link ldif object with it
 	#
 	if ( $use_temp ) {
 		my ( undef, $fname ) =
 		  File::Temp::tempfile( 'shelldap_XXXXXXXX', SUFFIX => '.ldif', TMPDIR => 1, UNLINK => 1 );
-		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => 0 );
+		$self->{'ldif'}	      = Net::LDAP::LDIF->new( $fname, 'w', sort => 1, wrap => 0, raw => $raw );
 		$self->{'ldif_fname'} = $fname;
 	}
 
 	# ldif -> stdout
 	#
 	else {
-		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1, wrap => $self->wrapsize );
+		$self->{'ldif'} = Net::LDAP::LDIF->new( \*STDOUT, 'w', sort => 1, wrap => $self->wrapsize, raw => $raw );
 	}
 
 	return $self->{'ldif'};
