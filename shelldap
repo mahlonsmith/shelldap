@@ -242,10 +242,13 @@ Display the version number.
 
 =head2 cat
 
-Display an LDIF dump of an entry.  Globbing is supported.  Specify
-either the full dn, or an rdn.  For most commands, rdns are local to the
-current search base. ('cwd', as translated to shell speak.)  You may additionally
-add a list of attributes to display.  Use '+' for server side attributes.
+Display LDIF dump of an entry. Globbing is supported. Specify either full DN, or a RDN.
+RDNs are local to the current search base ('cwd' in shell terms). If RDN is '.' or missing,
+it defaults to the current search base.
+You may additionally add a list of attributes to display (e.g. use '+' for operational
+attributes or provide a specific space-separated list). Default list of attributes is ['*']
+and this default list can be changed using 'attributes' config key or --attributes cmdline
+option.
 
     cat uid=mahlon
     cat ou=*
@@ -261,20 +264,21 @@ Like cat, but uses the configured pager to display output.
 Change directory.  Translated to LDAP, this changes the current basedn.
 All commands after a 'cd' operate within the new basedn.
 
-    cd                  change to 'home' basedn
-    cd ~                change to the binddn, or basedn if anonymously bound
+    cd                  change to 'home' (binddn if any, or basedn)
+    cd ~                change to 'home' (binddn if any, or basedn)
     cd -                change to previous node
     cd ou=People        change to explicit path below current node
     cd ..               change to parent node
     cd ../../ou=Groups  change to node ou=Groups, which is a sibling
                         to the current node's grandparent
 
-Since LDAP doesn't actually limit what can be a container object, you
-can actually cd into any entry. Many commands then work on '.', meaning
+Since LDAP doesn't limit what can be a container object, you can 'cd' into
+any entry. Many commands then work on '.' or default to '.', meaning
 "wherever I currently am."
 
     cd uid=mahlon
     cat .
+    cat
 
 =head2 clear
 
@@ -282,9 +286,9 @@ Clear the screen.
 
 =head2 copy
 
-Copy an entry to a different dn path.  All copies are relative to the
-current basedn, unless a full dn is specified.  All attributes are
-copied, then an LDAP moddn() is performed.
+Copy an entry to a different DN path.  All copies are relative to the
+current basedn unless a full DN is specified.  All attributes are
+copied and then an LDAP moddn() is performed.
 
     copy uid=mahlon uid=bob
     copy uid=mahlon ou=Others,dc=example,o=company
@@ -335,7 +339,7 @@ aliased to: vi
 
 =head2 grep
 
-Search for arbitrary LDAP filters, and return matching dn results.
+Search for arbitrary LDAP filters, and return matching DN results.
 The search string must be a valid LDAP filter.
 
     grep uid=mahlon
@@ -433,6 +437,15 @@ tried to follow it.
 
 For now, it only makes sense to connect to a master if you plan on doing
 any writes.
+
+Add ability for command definitions in cmd_map to contain default
+arguments passed to functions.
+
+Then add ability to define custom commands/aliases in config file.
+
+Split 'inspect' into separate commands, one working on files/entries,
+and one working on objectclasses. This way, autocompleter for both commands
+will be reasonable, unlike now.
 
 =head1 BUGS / LIMITATIONS
 
@@ -1386,7 +1399,7 @@ my %cmd_map = (
 	#'env'     => [ undef ],
 	#'help'    => [ undef ],
 	#'mkdir'   => [ undef ],
-	#'inspect' => [ undef ],
+	'inspect' => [ undef, 'comp_inspect' ],
 
 	'id'      => [ 'whoami' ],
 	'ls'      => [ 'list',   'comp_cwd' ],
