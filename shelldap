@@ -1195,7 +1195,7 @@ sub debug
 
 ### Autocomplete values: Returns cached children entries.
 ###
-sub autocomplete_cwd
+sub comp_cwd
 {
 	my $self = shift;
 	return @{ $self->{'cwd_entries'} };
@@ -1228,52 +1228,6 @@ sub comp_inspect
 {
 	my $self = shift;
 	return ('_schema', @{ $self->{'objectclasses'} }, @{ $self->{'cwd_entries'} });
-}
-
-
-### Inject various autocomplete and alias routines into the symbol table.
-###
-{
-	no warnings;
-	no strict 'refs';
-
-	# command, alias
-	my %cmd_map = (
-		whoami => 'id',
-		list   => 'ls',
-		grep   => 'search',
-		edit   => 'vi',
-		delete => 'rm',
-		copy   => 'cp',
-		cat    => 'read',
-		move   => 'mv',
-		less   => undef,
-		cd     => undef,
-		passwd => undef
-	);
-
-	# setup autocompletes
-	foreach ( %cmd_map ) {
-		next unless $_;
-		my $sub = "comp_$_";
-		*$sub   = \&autocomplete_cwd;
-	}
-	*comp_touch  = \&comp_create;
-	*comp_export = \&comp_setenv;
-
-	# setup alias subs
-	#
-	# Term::Shell has an alias_* feature, but
-	# it seems to work about 90% of the time.
-	# that last 10% is something of a mystery.
-	#
-	$cmd_map{'create'} = 'touch';
-	foreach my $cmd ( keys %cmd_map ) {
-		next unless defined $cmd_map{$cmd};
-		my $alias_sub = 'run_' . $cmd_map{$cmd};
-		my $real_sub  = 'run_' . $cmd;
-		*$alias_sub = \&$real_sub;
-	}
 }
 
 
@@ -1408,6 +1362,44 @@ sub diff {
 ########################################################################
 ### S H E L L   M E T H O D S
 ########################################################################
+
+# alias_or_command => [ real_command_name, completion_function ]
+#
+# It is not necessary to list all real commands here, but you can/should
+# do so to assign autocompleter function to them, and/or to define aliases.
+my %cmd_map = (
+	#'whoami'  => [ undef ],
+	#'pwd'     => [ undef ],
+	'list'    => [ undef, 'comp_cwd' ],
+	'grep'    => [ undef, 'comp_cwd' ],
+	'edit'    => [ undef, 'comp_cwd' ],
+	'delete'  => [ undef, 'comp_cwd' ],
+	'copy'    => [ undef, 'comp_cwd' ],
+	'cat'     => [ undef, 'comp_cwd' ],
+	'move'    => [ undef, 'comp_cwd' ],
+	'less'    => [ undef, 'comp_cwd' ],
+	'cd'      => [ undef, 'comp_cwd' ],
+	'create'  => [ undef, 'comp_create' ],
+	'setenv'  => [ undef, 'comp_setenv' ],
+	#'passwd'  => [ undef ],
+	##'clear'   => [ undef ],
+	#'env'     => [ undef ],
+	#'help'    => [ undef ],
+	#'mkdir'   => [ undef ],
+	#'inspect' => [ undef ],
+
+	'id'      => [ 'whoami' ],
+	'ls'      => [ 'list',   'comp_cwd' ],
+	'search'  => [ 'grep',   'comp_cwd' ],
+	'vi'      => [ 'edit',   'comp_cwd' ],
+	'rm'      => [ 'delete', 'comp_cwd' ],
+	'cp'      => [ 'copy',   'comp_cwd' ],
+	'read'    => [ 'read',   'comp_cwd' ],
+	'mv'      => [ 'move',   'comp_cwd' ],
+	'touch'   => [ 'create', 'comp_create' ],
+	'export'  => [ 'setenv', 'comp_setenv' ],
+);
+
 
 ### Don't die on a newline, just no-op.
 ###
@@ -1927,9 +1919,14 @@ sub run_grep
 sub run_help 
 {
 	my $self = shift;
-	my $command = shift;
 	my $section = 'SHELL COMMANDS';
-	$section .= "/$command" if $command;
+
+	my $command = shift;
+	if( $command ) {
+		# If it is an alias, resolve to real name:
+		$command = $cmd_map{$command}[0] if $cmd_map{$command}[0];
+		$section .= "/$command"
+	}
 
 	return Pod::Usage::pod2usage(
 		-exitval  => 'NOEXIT',
@@ -2335,6 +2332,31 @@ sub run_inspect
 
 	print "\n";
 	return;
+}
+
+
+### Inject various autocomplete and alias routines into the symbol table.
+###
+
+# setup alias subs
+#
+# Term::Shell has an alias_* feature, but
+# it seems to work about 90% of the time.
+# that last 10% is something of a mystery.
+#
+{ no strict 'refs';
+	while(my($cmd, $data) = each %cmd_map ) {
+		if( $$data[0]) {
+			my $alias_sub = 'run_' . $cmd;
+			my $real_sub  = 'run_' . $$data[0];
+			*$alias_sub = \&$real_sub;
+		}
+
+		if( $$data[1]) {
+			my $comp_sub = "comp_$cmd";
+			*$comp_sub   = \&{$$data[1]}
+		}
+	}
 }
 
 
