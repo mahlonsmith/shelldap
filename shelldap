@@ -667,8 +667,7 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		print "Would you like to cache your connection information? [Yn]: ";
 		chomp( my $response = <STDIN> );
 		unless ( $response =~ /^n/i ) {
-			YAML::Syck::DumpFile( $conf->{'configfile'}, $conf );
-			chmod 0600, $conf->{'configfile'};
+			main::save_config($conf->{configfile});
 			print "Connection info cached to $conf->{'configfile'}.\n";
 		}
 	}
@@ -2454,7 +2453,32 @@ sub load_config
 	eval { $conf = YAML::Syck::Load( $data ) };
 	die "Invalid YAML in $confpath\n" if $@;
 
+	# remove reference to itself, if somehow it got dumped
+	# into YAML.
+	if( $conf->{configfile} and ($confpath eq $conf->{configfile})) {
+		delete $conf->{'configfile'}
+	}
+
 	return $conf;
+}
+
+### dump YAML config into conf file while making sure that
+### name of configfile itself is not dumped if it is equal
+### to the file being written.
+###
+sub save_config
+{
+	my $confpath = shift;
+
+	my %conf2 = %$conf;
+	if( $confpath eq $conf->{configfile}) {
+		delete $conf2{'configfile'}
+	}
+
+	YAML::Syck::DumpFile( $conf->{'configfile'}, \%conf2 );
+	chmod 0600, $conf->{'configfile'};
+
+	return 1;
 }
 
 ### EOF
