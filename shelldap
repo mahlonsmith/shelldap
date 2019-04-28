@@ -240,7 +240,7 @@ Display the version number.
 
 =over 4
 
-=item B< cat>
+=head2 cat
 
 Display an LDIF dump of an entry.  Globbing is supported.  Specify
 either the full dn, or an rdn.  For most commands, rdns are local to the
@@ -252,11 +252,11 @@ add a list of attributes to display.  Use '+' for server side attributes.
     cat uid=mahlon,ou=People,dc=example,o=company
     cat uid=mahlon + userPassword
 
-=item B< less>
+=head2 less
 
 Like cat, but uses the configured pager to display output.
 
-=item B<  cd>
+=head2 cd
 
 Change directory.  Translated to LDAP, this changes the current basedn.
 All commands after a 'cd' operate within the new basedn.
@@ -276,11 +276,11 @@ can actually cd into any entry. Many commands then work on '.', meaning
     cd uid=mahlon
     cat .
 
-=item B<clear>
+=head2 clear
 
 Clear the screen.
 
-=item B<copy>
+=head2 copy
 
 Copy an entry to a different dn path.  All copies are relative to the
 current basedn, unless a full dn is specified.  All attributes are
@@ -292,7 +292,7 @@ copied, then an LDAP moddn() is performed.
 
 aliased to: cp
 
-=item B<create>
+=head2 create
 
 Create an entry from scratch.  Arguments are space separated objectClass
 names.  Possible objectClasses are derived automatically from the
@@ -307,7 +307,7 @@ and added to the LDAP directory.
 
 aliased to: touch
 
-=item B<delete>
+=head2 delete
 
 Remove an entry from the directory.  Globbing is supported.
 All deletes are sanity-prompted.  The -v flag prints the entries out
@@ -319,7 +319,7 @@ for review before delete.
 
 aliased to: rm
 
-=item B<edit>
+=head2 edit
 
 Edit an entry in an external editor.  After the editor exits, the
 resulting LDIF is sanity checked, and changes are written to the LDAP
@@ -329,11 +329,11 @@ directory.
 
 aliased to: vi
 
-=item B<env>
+=head2 env
 
  Show values for various runtime variables.
 
-=item B<grep>
+=head2 grep
 
 Search for arbitrary LDAP filters, and return matching dn results.
 The search string must be a valid LDAP filter.
@@ -344,7 +344,7 @@ The search string must be a valid LDAP filter.
 
  aliased to: search
 
-=item B<inspect>
+=head2 inspect
 
 View schema information about a given entry, or a list of arbitrary
 objectClasses, along with the most common flags for the objectClass
@@ -363,7 +363,7 @@ they allow multiple values or not.
 If you ask for the special "_schema" object, the raw server schema
 is dumped to screen.
 
-=item B<list>
+=head2 list
 
 List entries for the current basedn.  Globbing is supported.
 
@@ -385,38 +385,38 @@ types.  You can additionally specify your own mappings in your
         posixGroup: gidNumber
         ipHost: ipHostNumber
 
-=item B<mkdir>
+=head2 mkdir
 
 Creates a new 'organizationalUnit' entry.
 
     mkdir containername
     mkdir ou=whatever
 
-=item B<move>
+=head2 move
 
 Move an entry to a different dn path.  Usage is identical to B<copy>.
 
 aliased to: mv
 
-=item B<passwd>
+=head2 passwd
 
 If supported server side, change the password for a specified entry.
 The entry must have a 'userPassword' attribute.
 
     passwd uid=mahlon
 
-=item B< pwd>
+=head2 pwd
 
 Print the 'working directory' - aka, the current ldap basedn.
 
-=item B<setenv>
+=head2 setenv
 
 Modify various runtime variables normally set from the command line.
 
     setenv debug 1
     export debug=1
 
-=item B<whoami>
+=head2 whoami
 
 Show current auth credentials.  Unless you specified a binddn, this
 will just show an anonymous bind.
@@ -1926,10 +1926,15 @@ sub run_grep
 ###
 sub run_help 
 {
+	my $self = shift;
+	my $command = shift;
+	my $section = 'SHELL COMMANDS';
+	$section .= "/$command" if $command;
+
 	return Pod::Usage::pod2usage(
 		-exitval  => 'NOEXIT',
 		-verbose  => 99,
-		-sections => 'SHELL COMMANDS'
+		-sections => $section
 	);
 }
 
