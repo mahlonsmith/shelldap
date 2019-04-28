@@ -2327,6 +2327,9 @@ sub run_inspect
 	print "\nAttributes:\n";
 	foreach my $attr ( sort (@{$must_attr}, @{$may_attr}) ) {
 		my @flaglist;
+
+		push ( @flaglist, $must{$attr} ? 'required' : 'optional' );
+
 		if ( $self->{'schema'}->attribute( $attr )->{'single-value'} ) {
 			push ( @flaglist, 'single-value' );
 		}
@@ -2334,10 +2337,8 @@ sub run_inspect
 			push ( @flaglist, 'multivalue' );
 		}
 
-		push ( @flaglist, $must{$attr} ? 'required' : 'optional' );
-
 		my $flags = '';
-		$flags = (' (' . join( ', ', sort @flaglist ) . ')') if scalar @flaglist > 0;
+		$flags = (' (' . join( ', ', @flaglist ) . ')') if scalar @flaglist > 0;
 
 		printf( "    %s%s\n", $attr, $flags );
 	}
