@@ -857,8 +857,7 @@ sub display
 	my $use_pager = shift;
 
 	unless ( $dn ) {
-		print "No dn provided.\n";
-		return;
+		$dn = '.'
 	}
 
 	# support '.'
