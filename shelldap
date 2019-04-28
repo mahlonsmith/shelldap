@@ -1437,7 +1437,7 @@ sub run_cat
 {
 	my $self  = shift;
 	my $dn    = shift;
-	my @attrs = (@_) ? @_ : ('*');
+	my @attrs = (@_) ? @_ : @{$conf->{'attributes'}};
 
 	$self->display( $dn, \@attrs, 0 );
 }
@@ -2381,6 +2381,7 @@ Getopt::Long::GetOptions(
 	'binddn|D=s',
 	'basedn|b=s',
 	'cacheage=i',
+	'attributes=s@',
 	'paginate=i',
 	'promptpass|W',
 	'timeout=i',
@@ -2413,8 +2414,9 @@ if ( $conf->{'configfile'} ) {
 
 # defaults
 $conf->{'configfile'} ||= "$ENV{'HOME'}/.shelldap.rc";
-$conf->{'cacheage'} ||= 300;
-$conf->{'timeout'}  ||= 10;
+$conf->{'cacheage'}   ||= 300;
+$conf->{'timeout'}    ||= 10;
+$conf->{'attributes'} ||= ['*'];
 
 # create and enter shell loop
 my $shell = LDAP::Shell->new();
