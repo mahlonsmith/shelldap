@@ -1284,39 +1284,43 @@ sub debug
 
 ### Autocomplete values: Returns cached children entries.
 ###
-sub comp_cwd
+sub autocomplete_from_cwd
 {
 	my $self = shift;
-	return @{ $self->{'cwd_entries'} };
+	my $word = quotemeta shift;
+	return grep {/^$word/} @{ $self->{'cwd_entries'} };
 }
 
 
 ### Autocomplete values: Returns previously set shelldap environment values.
 ###
-sub comp_setenv
+sub autocomplete_from_env
 { 
 	my $self = shift;
-	return @{ $self->{'env'} };
+	my $word = quotemeta shift;
+	return grep {/^$word/} @{ $self->{'env'} };
 }
 
 
 ### Autocomplete values: Returns all objectClasses as defined
 ### by the LDAP server.
 ###
-sub comp_create
+sub autocomplete_from_objectclasses
 {
 	my $self = shift;
-	return @{ $self->{'objectclasses'} };
+	my $word = quotemeta shift;
+	return grep {/^$word/} @{ $self->{'objectclasses'} };
 }
 
 
 ### Autocomplete values: Returns all objectClasses as defined
 ### by the LDAP server, along with current children DNs.
 ###
-sub comp_inspect
+sub autocomplete_from_objectclasses_and_cwd
 {
 	my $self = shift;
-	return ('_schema', @{ $self->{'objectclasses'} }, @{ $self->{'cwd_entries'} });
+	my $word = quotemeta shift;
+	return grep {/^$word/} ('_schema', @{ $self->{'objectclasses'} }, @{ $self->{'cwd_entries'} });
 }
 
 
@@ -1458,36 +1462,38 @@ sub diff {
 # do so to assign autocompleter function to them, and/or to define aliases.
 tie my %cmd_map, 'Tie::IxHash';
 %cmd_map = (
+	# Real commands:
 	'whoami'  => [ undef ],
 	'pwd'     => [ undef ],
-	'list'    => [ undef, 'comp_cwd' ],
-	'grep'    => [ undef, 'comp_cwd' ],
-	'edit'    => [ undef, 'comp_cwd' ],
-	'delete'  => [ undef, 'comp_cwd' ],
-	'copy'    => [ undef, 'comp_cwd' ],
-	'cat'     => [ undef, 'comp_cwd' ],
-	'move'    => [ undef, 'comp_cwd' ],
-	'less'    => [ undef, 'comp_cwd' ],
-	'cd'      => [ undef, 'comp_cwd' ],
-	'create'  => [ undef, 'comp_create' ],
-	'setenv'  => [ undef, 'comp_setenv' ],
+	'list'    => [ undef, 'autocomplete_from_cwd' ],
+	'grep'    => [ undef, 'autocomplete_from_cwd' ],
+	'edit'    => [ undef, 'autocomplete_from_cwd' ],
+	'delete'  => [ undef, 'autocomplete_from_cwd' ],
+	'copy'    => [ undef, 'autocomplete_from_cwd' ],
+	'cat'     => [ undef, 'autocomplete_from_cwd' ],
+	'move'    => [ undef, 'autocomplete_from_cwd' ],
+	'less'    => [ undef, 'autocomplete_from_cwd' ],
+	'cd'      => [ undef, 'autocomplete_from_cwd' ],
+	'create'  => [ undef, 'autocomplete_from_objectclasses' ],
+	'setenv'  => [ undef, 'autocomplete_from_env' ],
 	'passwd'  => [ undef ],
 	'clear'   => [ undef ],
-	'env'     => [ undef ],
+	'env'     => [ undef, 'autocomplete_from_env' ],
 	#'help'    => [ undef ],
 	'mkdir'   => [ undef ],
-	'inspect' => [ undef, 'comp_inspect' ],
+	'inspect' => [ undef, 'autocomplete_from_objectclasses_and_cwd' ],
 
+	# Aliases:
 	'id'      => [ 'whoami' ],
-	'ls'      => [ 'list',   'comp_cwd' ],
-	'search'  => [ 'grep',   'comp_cwd' ],
-	'vi'      => [ 'edit',   'comp_cwd' ],
-	'rm'      => [ 'delete', 'comp_cwd' ],
-	'cp'      => [ 'copy',   'comp_cwd' ],
-	'read'    => [ 'read',   'comp_cwd' ],
-	'mv'      => [ 'move',   'comp_cwd' ],
-	'touch'   => [ 'create', 'comp_create' ],
-	'export'  => [ 'setenv', 'comp_setenv' ],
+	'ls'      => [ 'list'  ],
+	'search'  => [ 'grep'  ],
+	'vi'      => [ 'edit'  ],
+	'rm'      => [ 'delete'],
+	'cp'      => [ 'copy'  ],
+	'read'    => [ 'read'  ],
+	'mv'      => [ 'move'  ],
+	'touch'   => [ 'create' ],
+	'export'  => [ 'setenv'],
 	'?'       => [ 'help' ],
 	'man'     => [ 'help' ],
 );
@@ -2408,17 +2414,18 @@ sub run_inspect
 	my %aliases;
 
 	while(my($cmd, $data) = each %cmd_map ) {
-		# If command is an alias, insert alias symbol.
+		# If command is an alias, it is enough to mark it as such.
 		if( $$data[0]) {
 			$aliases{$$data[0]} ||= [];
 			push @{$aliases{$$data[0]}}, $cmd;
 
+		# If it is a real command, let's do more work.
 		} else {
-			## If completer is defined, set it.
-			#if( $$data[1]) {
-			#	my $comp_sub = "comp_$cmd";
-			#	*$comp_sub   = \&{$$data[1]}
-			#}
+			# If completer is defined, set it.
+			if( $$data[1]) {
+				my $comp_sub = "comp_$cmd";
+				*$comp_sub   = \&{$$data[1]}
+			}
 
 			# Define help and summary functions for the command:
 			my $pod = ''; open my $io, '>', \$pod;
