@@ -304,8 +304,6 @@ copied and then an LDAP moddn() is performed.
     copy uid=mahlon ou=Others,dc=example,o=company
     copy uid=mahlon,ou=People,dc=example,o=company uid=mahlon,ou=Others,dc=example,o=company
 
-aliased to: cp
-
 =head2 create
 
 Create an entry.
@@ -321,8 +319,6 @@ and added to the LDAP directory.
 
     create top person organizationalPerson inetOrgPerson posixAccount
 
-aliased to: touch
-
 =head2 delete
 
 Remove an entry.
@@ -335,8 +331,6 @@ for review before delete.
     delete uid=ma*
     rm -v uid=mahlon,ou=People,dc=example,o=company l=office
 
-aliased to: rm
-
 =head2 edit
 
 Edit an entry in an external editor.
@@ -346,8 +340,6 @@ resulting LDIF is sanity checked, and changes are written to the LDAP
 directory.
 
     edit uid=mahlon
-
-aliased to: vi
 
 =head2 env
 
@@ -365,8 +357,6 @@ The search string must be a valid LDAP filter.
     grep uid=mahlon
     grep uid=mahlon ou=People
     grep -r (&(uid=mahlon)(objectClass=*))
-
- aliased to: search
 
 =head2 inspect
 
@@ -393,8 +383,6 @@ is dumped to screen.
 List directory contents.
 
 Globbing is supported.
-
-aliased to: ls
 
     ls -l
     ls -lR uid=mahlon
@@ -424,8 +412,6 @@ Create a new 'organizationalUnit' LDAP entry.
 Move (rename) entry.
 
 Usage is identical to B<copy>.
-
-aliased to: mv
 
 =head2 passwd
 
@@ -2413,6 +2399,7 @@ sub run_inspect
 	local $| = 1;
 	my %aliases;
 
+	# In first pass, only identify aliases.
 	while(my($cmd, $data) = each %cmd_map ) {
 		# If command is an alias, it is enough to mark it as such.
 		if( $$data[0]) {
@@ -2420,7 +2407,12 @@ sub run_inspect
 			push @{$aliases{$$data[0]}}, $cmd;
 
 		# If it is a real command, let's do more work.
-		} else {
+		}
+	}
+
+	# In second pass, deal with non-aliases.
+	while(my($cmd, $data) = each %cmd_map ) {
+		if( !$$data[0]) {
 			# If completer is defined, set it.
 			if( $$data[1]) {
 				my $comp_sub = "comp_$cmd";
@@ -2438,6 +2430,10 @@ sub run_inspect
 				$summary =~ s/\s+/ /s;
 			}
 			my $help = join "\n", @pod;
+			if( $aliases{$cmd}) {
+				local $" = ', ';
+				$help .= "\n\n    Aliases: @{$aliases{$cmd}}\n"
+			}
 
 			my $helpfunc = sub { "$help\n" };
 			*{"help_$cmd"} = \&$helpfunc;
@@ -2447,6 +2443,7 @@ sub run_inspect
 		}
 	}
 
+	# In third pass, actually register found aliases.
 	while(my($cmd,$aliases) = each %aliases) {
 		my $aliasfunc = sub { @$aliases };
 		*{"alias_$cmd"} = \&$aliasfunc;
