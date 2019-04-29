@@ -461,9 +461,9 @@ Mahlon E. Smith <mahlon@martini.nu>
 package LDAP::Shell;
 use strict;
 use warnings;
-use Term::ReadKey;
-use Term::Shell;
-use Digest::MD5;
+use Term::ReadKey qw//;
+use Term::Shell qw//;
+use Digest::MD5 qw//;
 use Net::LDAP qw/
 	LDAP_SUCCESS
 	LDAP_SERVER_DOWN
@@ -478,15 +478,15 @@ use Net::LDAP qw/
 	LDAP_CONNECT_ERROR
 	LDAP_CONTROL_PAGED /;
 use Net::LDAP::Util qw/ canonical_dn ldap_explode_dn /;
-use Net::LDAP::LDIF;
-use Net::LDAP::Extension::SetPassword;
-use Net::LDAP::Control::Paged;
-use Data::Dumper;
-use File::Temp;
-use Algorithm::Diff;
+use Net::LDAP::LDIF qw//;
+use Net::LDAP::Extension::SetPassword qw//;
+use Net::LDAP::Control::Paged qw//;
+use Data::Dumper qw//;
+use File::Temp qw//;
+use Algorithm::Diff qw//;
 use Carp 'confess';
+use POSIX qw//;
 use base 'Term::Shell';
-
 
 my $conf = $main::conf;
 
@@ -1410,6 +1410,8 @@ my %cmd_map = (
 	'mv'      => [ 'move',   'comp_cwd' ],
 	'touch'   => [ 'create', 'comp_create' ],
 	'export'  => [ 'setenv', 'comp_setenv' ],
+	'?'       => [ 'help' ],
+	'man'     => [ 'help' ],
 );
 
 
@@ -2457,9 +2459,22 @@ $conf->{'cacheage'}   ||= 300;
 $conf->{'timeout'}    ||= 10;
 $conf->{'attributes'} ||= ['*'];
 
-# create and enter shell loop
-my $shell = LDAP::Shell->new();
+
+# create and enter shell loop while also handling Ctrl+C correctly.
+my $shell = LDAP::Shell->new;
+my $sigset = POSIX::SigSet->new();
+sub ctrl_c_handler {
+	print "\n";
+	$shell->term->on_new_line;
+	$shell->term->replace_line('', 0);
+	$shell->term->redisplay;
+}
+my $sigaction = POSIX::SigAction->new( \&ctrl_c_handler, $sigset, 0);
+my $old_action = POSIX::SigAction->new;
+POSIX::sigaction(&POSIX::SIGINT, $sigaction, $old_action); # save default one
 $shell->cmdloop();
+POSIX::sigaction(&POSIX::SIGINT, $old_action); # restore default one
+
 
 ### load YAML config into global conf.
 ###
