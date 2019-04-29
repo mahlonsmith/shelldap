@@ -242,7 +242,9 @@ Display the version number.
 
 =head2 cat
 
-Display LDIF dump of an entry. Globbing is supported. Specify either full DN, or a RDN.
+Print contents of LDAP entry to STDOUT in LDIF format.
+
+Globbing is supported. Specify either full DN, or a RDN.
 RDNs are local to the current search base ('cwd' in shell terms). If RDN is '.' or missing,
 it defaults to the current search base.
 You may additionally add a list of attributes to display (e.g. use '+' for operational
@@ -257,11 +259,13 @@ option.
 
 =head2 less
 
-Like cat, but uses the configured pager to display output.
+Like 'cat', but use configured pager to paginate output.
 
 =head2 cd
 
-Change directory.  Translated to LDAP, this changes the current basedn.
+Change the working directory (LDAP search base).
+
+Translated to LDAP, this changes the current basedn.
 All commands after a 'cd' operate within the new basedn.
 
     cd                  change to 'home' (binddn if any, or basedn)
@@ -282,11 +286,17 @@ any entry. Many commands then work on '.' or default to '.', meaning
 
 =head2 clear
 
-Clear the screen.
+Clear the terminal screen.
+
+Clears screen similar to 'clear' or Ctrl+l on the shell command line.
+
+Ctrl+l alias is also supported.
 
 =head2 copy
 
-Copy an entry to a different DN path.  All copies are relative to the
+Copy an entry.
+
+All copies are relative to the
 current basedn unless a full DN is specified.  All attributes are
 copied and then an LDAP moddn() is performed.
 
@@ -298,7 +308,9 @@ aliased to: cp
 
 =head2 create
 
-Create an entry from scratch.  Arguments are space separated objectClass
+Create an entry.
+
+Arguments are space separated objectClass
 names.  Possible objectClasses are derived automatically from the
 server, and will tab-complete.
 
@@ -313,7 +325,9 @@ aliased to: touch
 
 =head2 delete
 
-Remove an entry from the directory.  Globbing is supported.
+Remove an entry.
+
+Globbing is supported.
 All deletes are sanity-prompted.  The -v flag prints the entries out
 for review before delete.
 
@@ -325,7 +339,9 @@ aliased to: rm
 
 =head2 edit
 
-Edit an entry in an external editor.  After the editor exits, the
+Edit an entry in an external editor.
+
+After the editor exits, the
 resulting LDIF is sanity checked, and changes are written to the LDAP
 directory.
 
@@ -335,11 +351,15 @@ aliased to: vi
 
 =head2 env
 
- Show values for various runtime variables.
+Print values of configurable shelldap variables.
+
+This is a subset of all variables configurable via shelldap config
+file and/or its command line options.
 
 =head2 grep
 
-Search for arbitrary LDAP filters, and return matching DN results.
+Search using LDAP filters and return matching DN results.
+
 The search string must be a valid LDAP filter.
 
     grep uid=mahlon
@@ -350,8 +370,9 @@ The search string must be a valid LDAP filter.
 
 =head2 inspect
 
-View schema information about a given entry, or a list of arbitrary
-objectClasses, along with the most common flags for the objectClass
+View schema and flags for an entry or objectClass.
+
+It also includes the most common flags for the objectClass
 attributes.
 
     inspect uid=mahlon
@@ -369,7 +390,9 @@ is dumped to screen.
 
 =head2 list
 
-List entries for the current basedn.  Globbing is supported.
+List directory contents.
+
+Globbing is supported.
 
 aliased to: ls
 
@@ -391,18 +414,22 @@ types.  You can additionally specify your own mappings in your
 
 =head2 mkdir
 
-Creates a new 'organizationalUnit' entry.
+Create a new 'organizationalUnit' LDAP entry.
 
-    mkdir containername
-    mkdir ou=whatever
+	mkdir containername
+	mkdir ou=whatever
 
 =head2 move
 
-Move an entry to a different dn path.  Usage is identical to B<copy>.
+Move (rename) entry.
+
+Usage is identical to B<copy>.
 
 aliased to: mv
 
 =head2 passwd
+
+Change user password.
 
 If supported server side, change the password for a specified entry.
 The entry must have a 'userPassword' attribute.
@@ -411,21 +438,21 @@ The entry must have a 'userPassword' attribute.
 
 =head2 pwd
 
-Print the 'working directory' - aka, the current ldap basedn.
+Print name of current/working LDAP search base.
 
 =head2 setenv
 
-Modify various runtime variables normally set from the command line.
+Change or define shelldap variable.
 
     setenv debug 1
     export debug=1
 
 =head2 whoami
 
+Print current bind DN.
+
 Show current auth credentials.  Unless you specified a binddn, this
 will just show an anonymous bind.
-
-aliased to: id
 
 =back
 
@@ -486,12 +513,62 @@ use File::Temp qw//;
 use Algorithm::Diff qw//;
 use Carp 'confess';
 use POSIX qw//;
+use Tie::IxHash qw//;
 use base 'Term::Shell';
 
 my $conf = $main::conf;
 
 # make 'die' backtrace in debug mode
 $SIG{'__DIE__'} = \&Carp::confess if $conf->{'debug'};
+
+
+
+########################################################################
+### Term::Shell Fixes
+########################################################################
+
+# Term::Shell function add_handlers() is implemented in an incorrect way.
+# We reimplement the method here to fix its problems.
+
+# In add_handlers, we split searching for aliases in a separate loop,
+# because otherwise not all aliases are registered before we look them
+# up.
+sub add_handlers
+{
+    my $o = shift;
+    for my $hnd (@_)
+    {
+        next unless $hnd =~ /^(run|help|smry|comp|catch|alias)_/o;
+        my $t = $1;
+        my $a = substr( $hnd, length($t) + 1 );
+ 
+        # Add on the prefix and suffix if the command is defined
+        if ( length $a )
+        {
+            substr( $a, 0, 0 ) = $o->cmd_prefix;
+            $a .= $o->cmd_suffix;
+        }
+        $o->{handlers}{$a}{$t} = $hnd;
+    }
+    for my $hnd (@_)
+    {
+        next unless $hnd =~ /^(run|help|smry|comp|catch|alias)_/o;
+        my $t = $1;
+        my $a = substr( $hnd, length($t) + 1 );
+
+        if ( $o->has_aliases($a) )
+        {
+            my @a = $o->get_aliases($a);
+            for my $alias (@a)
+            {
+                substr( $alias, 0, 0 ) = $o->cmd_prefix;
+                $alias .= $o->cmd_suffix;
+                $o->{handlers}{$alias}{$t} = $hnd;
+            }
+        }
+    }
+}
+
 
 
 ########################################################################
@@ -1379,9 +1456,10 @@ sub diff {
 #
 # It is not necessary to list all real commands here, but you can/should
 # do so to assign autocompleter function to them, and/or to define aliases.
-my %cmd_map = (
-	#'whoami'  => [ undef ],
-	#'pwd'     => [ undef ],
+tie my %cmd_map, 'Tie::IxHash';
+%cmd_map = (
+	'whoami'  => [ undef ],
+	'pwd'     => [ undef ],
 	'list'    => [ undef, 'comp_cwd' ],
 	'grep'    => [ undef, 'comp_cwd' ],
 	'edit'    => [ undef, 'comp_cwd' ],
@@ -1393,11 +1471,11 @@ my %cmd_map = (
 	'cd'      => [ undef, 'comp_cwd' ],
 	'create'  => [ undef, 'comp_create' ],
 	'setenv'  => [ undef, 'comp_setenv' ],
-	#'passwd'  => [ undef ],
-	##'clear'   => [ undef ],
-	#'env'     => [ undef ],
+	'passwd'  => [ undef ],
+	'clear'   => [ undef ],
+	'env'     => [ undef ],
 	#'help'    => [ undef ],
-	#'mkdir'   => [ undef ],
+	'mkdir'   => [ undef ],
 	'inspect' => [ undef, 'comp_inspect' ],
 
 	'id'      => [ 'whoami' ],
@@ -1413,11 +1491,6 @@ my %cmd_map = (
 	'?'       => [ 'help' ],
 	'man'     => [ 'help' ],
 );
-
-
-### Don't die on a newline, just no-op.
-###
-sub run_ { return; }
 
 
 ### Term::Shell hook.
@@ -1928,28 +2001,6 @@ sub run_grep
 }
 
 
-### Override internal help function with pod2usage output.
-###
-sub run_help 
-{
-	my $self = shift;
-	my $section = 'SHELL COMMANDS';
-
-	my $command = shift;
-	if( $command ) {
-		# If it is an alias, resolve to real name:
-		$command = $cmd_map{$command}[0] if $cmd_map{$command}[0];
-		$section .= "/$command"
-	}
-
-	return Pod::Usage::pod2usage(
-		-exitval  => 'NOEXIT',
-		-verbose  => 99,
-		-sections => $section
-	);
-}
-
-
 ### Generate and display a list of LDAP entries, relative to the current
 ### location the command was run from.
 ###
@@ -2352,25 +2403,46 @@ sub run_inspect
 
 ### Inject various autocomplete and alias routines into the symbol table.
 ###
-
-# setup alias subs
-#
-# Term::Shell has an alias_* feature, but
-# it seems to work about 90% of the time.
-# that last 10% is something of a mystery.
-#
 { no strict 'refs';
-	while(my($cmd, $data) = each %cmd_map ) {
-		if( $$data[0]) {
-			my $alias_sub = 'run_' . $cmd;
-			my $real_sub  = 'run_' . $$data[0];
-			*$alias_sub = \&$real_sub;
-		}
+	local $| = 1;
+	my %aliases;
 
-		if( $$data[1]) {
-			my $comp_sub = "comp_$cmd";
-			*$comp_sub   = \&{$$data[1]}
+	while(my($cmd, $data) = each %cmd_map ) {
+		# If command is an alias, insert alias symbol.
+		if( $$data[0]) {
+			$aliases{$$data[0]} ||= [];
+			push @{$aliases{$$data[0]}}, $cmd;
+
+		} else {
+			## If completer is defined, set it.
+			#if( $$data[1]) {
+			#	my $comp_sub = "comp_$cmd";
+			#	*$comp_sub   = \&{$$data[1]}
+			#}
+
+			# Define help and summary functions for the command:
+			my $pod = ''; open my $io, '>', \$pod;
+			Pod::Usage::pod2usage( -exitval  => 'NOEXIT', -verbose  => 99, -sections => "SHELL COMMANDS/${\( quotemeta $cmd )}", -output => \*$io );
+			my @pod = split /\n/, $pod;
+			my $summary = $pod[1];
+			if($summary) {
+				$summary =~ s/^\s+//s;
+				$summary =~ s/\s+$//s;
+				$summary =~ s/\s+/ /s;
+			}
+			my $help = join "\n", @pod;
+
+			my $helpfunc = sub { "$help\n" };
+			*{"help_$cmd"} = \&$helpfunc;
+
+			my $summfunc = sub { $summary };
+			*{"smry_$cmd"} = \&$summfunc;
 		}
+	}
+
+	while(my($cmd,$aliases) = each %aliases) {
+		my $aliasfunc = sub { @$aliases };
+		*{"alias_$cmd"} = \&$aliasfunc;
 	}
 }
 
@@ -2432,10 +2504,10 @@ Getopt::Long::GetOptions(
 	'tls_key=s',
 	'tls', 'debug', 'version',
 	 help => sub {
-		Pod::Usage::pod2usage(
-			-verbose => 1,
-			-message => "\n$0 command line flags\n" . '-' x 65
-		);
+	  Pod::Usage::pod2usage(
+	  	-verbose => 1,
+	  	-message => "\n$0 command line flags\n" . '-' x 65
+	  );
 	}
 );
 
