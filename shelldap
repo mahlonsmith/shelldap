@@ -2608,13 +2608,14 @@ sub save_config
 {
 	my $confpath = shift;
 
-	my %conf2 = %$conf;
-	if( $confpath eq $conf->{configfile}) {
-		delete $conf2{'configfile'}
+	# This check is currently unnecessary because the comparison will always
+	# be true, but is left here for effect of least surprise in the future.
+	if( defined($conf->{'configfile'}) and ($confpath eq $conf->{'configfile'})) {
+		delete $conf->{'configfile'}
 	}
 
-	YAML::Syck::DumpFile( $conf->{'configfile'}, \%conf2 );
-	chmod 0600, $conf->{'configfile'};
+	YAML::Syck::DumpFile( $confpath, $conf );
+	chmod 0600, $confpath;
 
 	return 1;
 }
