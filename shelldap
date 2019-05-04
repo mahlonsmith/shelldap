@@ -2011,7 +2011,7 @@ sub run_list
 	my $filter;
 
 	# flag booleans
-	my ( $recurse, $long );
+	my ( $recurse, $long, $all );
 
 	# parse arguments: [ <option> ...] [<filter> ...] [<attribute> ...]
 	#
@@ -2021,6 +2021,7 @@ sub run_list
 			my $flags = $1;
 			$recurse  = $flags =~ /R/;
 			$long	  = $flags =~ /l/;
+			$all	  = $flags =~ /a/;
 			shift( @args );
 		}
 
@@ -2076,7 +2077,11 @@ sub run_list
 	my $base = $self->base();
 	foreach my $e ( sort { $a->dn() cmp $b->dn() } @{ $s->{'entries'} } ) {
 		my $dn = $e->dn();
-		next if lc( $dn ) eq lc( $base );
+
+		# Later, turn this into '.' and '..' display
+		unless($all) {
+			next if lc( $dn ) eq lc( $base );
+		}
 
 		if ( ! $long ) {
 			# strip the current base from the dn, if we're recursing and not in long mode
@@ -2090,37 +2095,42 @@ sub run_list
 			}
 		}
 
+		my $type = '-'; # Assume the entry is a leaf
+
 		# if this entry is a container for other entries, append a
 		# trailing slash.
-		$dn .= '/'  if $e->get_value('hasSubordinates') &&
-			$e->get_value('hasSubordinates') eq 'TRUE';
+		if( $e->get_value('hasSubordinates') && $e->get_value('hasSubordinates') eq 'TRUE') {
+			$dn .= '/';
+			$type = 'd'
+		}
 
 		# additional arguments/attributes were given; show their values
 		#
 		if ( scalar @args ) {
-			my @elements = ( $dn );
+			my @line = ( $type, $dn );
 
 			foreach my $attr ( @args ) {
 				my @vals = $e->get_value( $attr );
-				push( @elements, join(',', @vals) );
+				push( @line, join(',', @vals) );
 			}
 
-			print join( "\t", @elements )."\n";
+			print join( "\t", @line )."\n";
+
 		}
 
 		# show descriptions
 		#
 		else {
+			my $line = "$type $dn";
+
 			my $desc = $e->get_value( 'description' );
 			if ( $desc ) {
 				$desc =~ s/\n.*//s; # 1st line only
-				$dn .= " ($desc)";
-			}
-
-			# no desc?  Try and infer something useful
-			# to display.
-			#
-			else {
+				$line .= " ($desc)";
+			} else {
+				# no desc?  Try and infer something useful
+				# to display.
+				#
 
 				# pull objectClasses, hash for lookup speed
 				my @oc = $e->get_value( 'objectClass' );
@@ -2130,12 +2140,12 @@ sub run_list
 				foreach my $d_listing ( sort keys %descs ) {
 					if ( exists $ochash{ $d_listing } ) {
 						my $str = $e->get_value( $descs{ $d_listing }, asref => 1 );
-						$dn .= ' (' . (join ', ', @$str) . ')' if $str && scalar @$str;
+						$line .= ' (' . (join ', ', @$str) . ')' if $str && scalar @$str;
 					}
 					next;
 				}
 			}
-			print "$dn\n";
+			print "$line\n";
 		}
 		$dn_count++;
 	}
