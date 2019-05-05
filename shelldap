@@ -145,7 +145,7 @@ pagination to build listings.  Note: if you're using this to avoid
 sizelimit errors, you'll likely need server configuration to raise the
 limits for paginated results.
 
-	--paginate 100
+  --paginate 100
 
 =back
 
@@ -240,6 +240,25 @@ Display the version number.
 
 =over 4
 
+=head2 alias
+
+Define or display aliases.
+
+Without arguments, `alias' prints the list of aliases in the reusable
+form `alias NAME=VALUE' on standard output.
+
+Otherwise, an alias is defined for each NAME whose VALUE is given.
+A trailing space in VALUE causes the next word to be checked for
+alias substitution when the alias is expanded.
+
+    alias
+    alias ll=ls -al
+    alias ll
+    alias show=cat
+    alias cmd1=command 'arg with spaces'
+    alias cmd2='command '
+    alias cmd2=command 'with_arg '
+
 =head2 cat
 
 Print contents of LDAP entry to STDOUT in LDIF format.
@@ -256,6 +275,24 @@ option.
     cat ou=*
     cat uid=mahlon,ou=People,dc=example,o=company
     cat uid=mahlon + userPassword
+
+=head2 configfile
+
+Load or save config file.
+
+If no config file is specified as argument to 'load', the default search list is:
+
+    $HOME/.shelldap.rc
+    /usr/local/etc/shelldap.conf
+    /etc/shelldap.conf
+
+If no config file is specified as argument to 'save', the default path is
+$HOME/.shelldap.rc.
+
+    configfile load
+    configfile load /path/to/config
+    configfile save
+    configfile save /path/to/config
 
 =head2 less
 
@@ -404,8 +441,8 @@ types.  You can additionally specify your own mappings in your
 
 Create a new 'organizationalUnit' LDAP entry.
 
-	mkdir containername
-	mkdir ou=whatever
+  mkdir containername
+  mkdir ou=whatever
 
 =head2 move
 
@@ -432,6 +469,16 @@ Change or define shelldap variable.
 
     setenv debug 1
     export debug=1
+
+=head2 unalias
+
+Remove each NAME from the list of defined aliases.
+
+    alias ll=ls -al
+    alias
+    unalias ll
+    unalias ll ls
+    alias
 
 =head2 whoami
 
@@ -1451,11 +1498,11 @@ sub diff {
 
 # alias_or_command => [ real_command_name, completion_function ]
 #
-# It is not necessary to list all real commands here, but you can/should
-# do so to assign autocompleter function to them, and/or to define aliases.
 tie my %cmd_map, 'Tie::IxHash';
 %cmd_map = (
 	# Real commands:
+	'alias'   => [ undef ],
+	'configfile'=> [ undef ],
 	'whoami'  => [ undef ],
 	'pwd'     => [ undef ],
 	'list'    => [ undef, 'autocomplete_from_cwd' ],
@@ -1475,6 +1522,7 @@ tie my %cmd_map, 'Tie::IxHash';
 	#'help'    => [ undef ],
 	'mkdir'   => [ undef ],
 	'inspect' => [ undef, 'autocomplete_from_objectclasses_and_cwd' ],
+	'unalias' => [ undef ],
 
 	# Aliases:
 	'id'      => [ 'whoami' ],
@@ -1508,6 +1556,81 @@ sub precmd
 } 
 
 
+### Display or define aliases.
+###
+sub run_alias
+{
+	my $self  = shift;
+	my $cmd_alias = shift;
+
+	# If $cmd_alias is empty, user requested printing of known aliases
+	unless($cmd_alias) {
+		while(my($alias,$cmd_args) = each %{$conf->{alias}}) {
+			print "alias $alias=${\( join ' ', map { $_=~ /\s/ ? \"'$_'\" : $_} @{$cmd_args})}\n";
+		}
+		return
+
+	# If there is argument but without =, user wanted to print specific alias
+	} elsif($cmd_alias !~ /=/ and !@_) {
+		my $alias = $cmd_alias;
+		my $cmd_args = $conf->{alias}{$alias};
+		unless( $cmd_args) {
+			print "alias: $alias: not found\n";
+		} else {
+			print "alias $alias=${\( join ', ', map {\"'$_'\"} @{$cmd_args})}\n";
+		}
+		return
+
+	# There is argument with =, so the line is a new alias definition
+	} else {
+		my($alias, $command) = split /=/, $cmd_alias, 2;
+		$command = $cmd_map{$command}[0] if $cmd_map{$command} and $cmd_map{$command}[0];
+		$conf->{alias}{$alias} = [ $command, @_ ];
+	}
+}
+
+# Remove alias
+sub run_unalias
+{
+	my $self = shift;
+	for my $alias(@_) {
+		unless( $conf->{alias}{$alias}) {
+			print "alias: $alias: not found\n";
+		} else {
+		delete $conf->{alias}{$alias};
+		}
+	}
+	return
+}
+
+# Run aliased command when alias is entered
+sub catch_run {
+	my $self = shift;
+	my @cmdline;
+
+	unless( $conf->{alias}{$_[0]}) {
+		print $self->msg_unknown_cmd($_[0]);
+		return
+	}
+
+	my $done = 0;
+	while(my $arg = $_[0]) {
+		my @alias = @{$conf->{alias}{$arg} or last};
+
+		if($alias[-1] !~ s/\s+$//) {
+			$done++
+		}
+		push @cmdline, @alias;
+		shift;
+		last if $done;
+	}
+
+	push @cmdline, @_;
+
+	$self->run(@cmdline);
+}
+
+
 ### Display an entry as LDIF to the terminal.
 ###
 sub run_cat 
@@ -1517,6 +1640,29 @@ sub run_cat
 	my @attrs = (@_) ? @_ : @{$conf->{'attributes'}};
 
 	$self->display( $dn, \@attrs, 0 );
+}
+
+
+### Load or save config
+###
+sub run_configfile
+{
+	my $self     = shift;
+	my $action   = shift;
+	my $filepath = shift;
+
+	unless ( $action and $action =~ /^(?:load|save)$/) {
+		print "No action specified; use 'load' or 'save'.\n";
+		return;
+	}
+
+	if( $action eq 'load') {
+		main::load_config($filepath);
+		print "Loaded.\n";
+	} elsif( $action eq 'save') {
+		main::save_config($filepath);
+		print "Saved.\n";
+	}
 }
 
 
@@ -2087,10 +2233,8 @@ sub run_list
 			# strip the current base from the dn, if we're recursing and not in long mode
 			if ( $recurse ) {
 				$dn =~ s/,$base//oi;
-			}
-
 			# only show RDN unless -l was given
-			else {
+			} else {
 				$dn = canonical_dn( [shift(@{ldap_explode_dn($dn, casefold => 'none')})], casefold => 'none' )
 			}
 		}
@@ -2607,6 +2751,8 @@ sub load_config
 		delete $conf->{'configfile'}
 	}
 
+	$conf->{alias} ||= {};
+
 	return $conf;
 }
 
@@ -2616,7 +2762,7 @@ sub load_config
 ###
 sub save_config
 {
-	my $confpath = shift;
+	my $confpath = (shift) || "$ENV{'HOME'}/.shelldap.rc";
 
 	# This check is currently unnecessary because the comparison will always
 	# be true, but is left here for effect of least surprise in the future.
