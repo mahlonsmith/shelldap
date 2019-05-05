@@ -624,7 +624,7 @@ sub init
 
 	$self->{'editor'} = $conf->{'editor'} || $ENV{'EDITOR'} || 'vi';
 	$self->{'pager'}  = $conf->{'pager'}  || $ENV{'PAGER'}  || 'less';
-	$self->{'env'}	  = [ qw/ debug cacheage timeout / ];
+	$self->{'env'}	  = [ qw/ debug cacheage timeout attributes / ];
 
 	# let autocomplete work with the '=' character
 	my $term = $self->term();
@@ -2075,11 +2075,8 @@ sub run_env
 {
 	my $self = shift;
 
-	foreach ( sort @{ $self->{'env'} } ) {
-		print "$_: ";
-		print $conf->{$_} ? $conf->{$_} : 0; 
-		print "\n"
-	}
+	print YAML::Syck::Dump( { map { $_, $conf->{$_}} sort @{ $self->{'env'}} } );
+	print "\n"
 }
 
 
@@ -2659,7 +2656,7 @@ Getopt::Long::GetOptions(
 	'binddn|D=s',
 	'basedn|b=s',
 	'cacheage=i',
-	'attributes=s@',
+	'cmdline_attributes|attributes=s@',
 	'paginate=i',
 	'promptpass|W',
 	'timeout=i',
@@ -2696,6 +2693,11 @@ $conf->{'cacheage'}   ||= 300;
 $conf->{'timeout'}    ||= 10;
 $conf->{'attributes'} ||= ['*'];
 
+# Allow command line option --attributes to override settings from
+# config file.
+if($conf->{'cmdline_attributes'}) {
+	$conf->{'attributes'} = $conf->{'cmdline_attributes'}
+}
 
 # create and enter shell loop while also handling Ctrl+C correctly.
 my $shell = LDAP::Shell->new;
