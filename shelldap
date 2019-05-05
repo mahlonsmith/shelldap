@@ -109,6 +109,7 @@ address, or a URI.
 
     --server ldaps://ldap.example.net
     -H ldaps://ldap.example.net
+    -h hostname_or_IP
 
 =back
 
@@ -165,7 +166,7 @@ credentials.
 A space separated list of SASL mechanisms.  Requires the Authen::SASL
 module.
 
-    --sasl "PLAIN CRAM-MD5 GSSAPI"
+    --sasl 'PLAIN CRAM-MD5 GSSAPI'
 
 =back
 
@@ -547,6 +548,7 @@ use Algorithm::Diff qw//;
 use Carp 'confess';
 use POSIX qw//;
 use Tie::IxHash qw//;
+use Perl6::Slurp qw/slurp/;
 use base 'Term::Shell';
 
 my $conf = $main::conf;
@@ -652,7 +654,7 @@ sub init
 		my @versions = $self->{'root_dse'}->get_value('supportedLDAPVersion');
 		print "Connected to $conf->{'server'}\n";
 		print "Supported LDAP version: ", ( join ', ', @versions ), "\n";
-		print "Cipher in use: ", $self->ldap()->cipher(), "\n";
+		print "Cipher in use: ", $self->ldap()->cipher() || '', "\n";
 	}
 
 	# check for the pagination extension on the server early, and bail
@@ -702,19 +704,25 @@ sub ldap
 You may try connecting insecurely, or install the module and try again.\n} if $@;
 	}
 
-	# Prompt for a password after disabling local echo.
-	#
-	if ( ($conf->{'binddn'} && ! $conf->{'bindpass'}) || $conf->{'promptpass'} ) {
-		print "Bind password: ";
-		Term::ReadKey::ReadMode 2;
-		chomp( $conf->{'bindpass'} = <STDIN> );
-		Term::ReadKey::ReadMode 0;
-		print "\n";
+	if ($conf->{'binddn'}) {
+		if($conf->{'promptpass'}) {
+			# Prompt for a password after disabling local echo.
+			#
+			print "Bind password: ";
+			Term::ReadKey::ReadMode 2;
+			chomp( $conf->{'bindpass'} = <STDIN> );
+			Term::ReadKey::ReadMode 0;
+			print "\n";
+		} elsif($conf->{'pass'}) {
+			$conf->{'bindpass'} = $conf->{'pass'}
+		} elsif($conf->{'passfile'}) {
+			chomp( $conf->{'bindpass'} = slurp $conf->{'passfile'} );
+		}
 	}
 
 	# make the connection
-	my $ldap = Net::LDAP->new( $conf->{'server'} )
-		or die "Unable to connect to LDAP server '$conf->{'server'}': $!\n";
+	my $ldap = Net::LDAP->new( $conf->{'server'}, $conf->{port} ? ('port' => $conf->{port}) : ())
+		or die "Unable to connect to LDAP server '$conf->{'server'}' port ${\( $conf->{port} || 'default' )}: $!\n";
 
 	# secure connection options
 	#
@@ -2639,9 +2647,9 @@ use warnings;
 $0 = 'shelldap';
 my $VERSION = '1.4.0';
 
-use Getopt::Long;
-use YAML::Syck;
-use Pod::Usage;
+use Getopt::Long qw(:config no_ignore_case);
+use YAML::Syck qw//;
+use Pod::Usage qw//;
 eval { require Term::ReadLine::Gnu; };
 warn qq{Term::ReadLine::Gnu not installed.
 Continuing, but shelldap is of limited usefulness without it.\n\n} if $@;
@@ -2651,20 +2659,29 @@ use vars '$conf';
 $conf = load_config() || {};
 Getopt::Long::GetOptions(
 	$conf, 
-	'server|H=s',
+	'server|h|H=s',
+	'port|p=s',
 	'configfile|f=s',
 	'binddn|D=s',
 	'basedn|b=s',
 	'cacheage=i',
 	'cmdline_attributes|attributes=s@',
 	'paginate=i',
-	'promptpass|W',
+	'promptpass|W!',
+	'pass|w=s',
+	'passfile|y=s',
 	'timeout=i',
 	'sasl|Y=s',
+	'simple|x!' => sub {
+		my($opt,$arg) = @_;
+		$conf->{sasl} = $arg ? undef : 'PLAIN CRAM-MD5 GSSAPI'
+	},
 	'tls_cacert=s',
 	'tls_cert=s',
 	'tls_key=s',
-	'tls', 'debug', 'version',
+	'tls|Z|ZZ!',
+	'debug|v',
+	'version',
 	 help => sub {
 	  Pod::Usage::pod2usage(
 	  	-verbose => 1,
