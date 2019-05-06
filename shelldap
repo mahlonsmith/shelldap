@@ -1578,8 +1578,8 @@ sub run_alias
 		}
 		return
 
-	# If there is argument but without =, user wanted to print specific alias
-	} elsif($cmd_alias !~ /=/ and !@_) {
+	# If there is argument but without = or space, user wanted to print specific alias
+	} elsif($cmd_alias !~ /[=\s]/ and !@_) {
 		my $alias = $cmd_alias;
 		my $cmd_args = $conf->{alias}{$alias};
 		unless( $cmd_args) {
@@ -1591,9 +1591,13 @@ sub run_alias
 
 	# There is argument with =, so the line is a new alias definition
 	} else {
-		my($alias, $command) = split /=/, $cmd_alias, 2;
+		my($alias, $command) = ($cmd_alias =~ m/^(\S+?)[=\s]?(.*)$/);
+		unless( $alias) {
+			print "Invalid syntax.\n";
+			return
+		}
 		$command = $cmd_map{$command}[0] if $cmd_map{$command} and $cmd_map{$command}[0];
-		$conf->{alias}{$alias} = [ $command, @_ ];
+		$conf->{alias}{$alias} = [ $command ? $command : (), @_ ];
 	}
 }
 
