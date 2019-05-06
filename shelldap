@@ -548,7 +548,7 @@ use Algorithm::Diff qw//;
 use Carp 'confess';
 use POSIX qw//;
 use Tie::IxHash qw//;
-use Perl6::Slurp qw/slurp/;
+use Fatal qw/open/;
 use base 'Term::Shell';
 
 my $conf = $main::conf;
@@ -716,7 +716,7 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 		} elsif($conf->{'pass'}) {
 			$conf->{'bindpass'} = $conf->{'pass'}
 		} elsif($conf->{'passfile'}) {
-			chomp( $conf->{'bindpass'} = slurp $conf->{'passfile'} );
+			chomp( $conf->{'bindpass'} = slurp($conf->{'passfile'}));
 		}
 	}
 
@@ -869,7 +869,7 @@ sub chksum
 	my $file = shift or return;
 
 	my $md5 = Digest::MD5->new();
-	open F, $file or die "Unable to read file: $!\n";
+	open F, $file;
 	my $hash = $md5->addfile( *F )->hexdigest();
 	close F;
 
@@ -2006,7 +2006,7 @@ sub run_edit
 	}
 
 	# load it into an array for potential comparison
-	open LDIF, "$self->{'ldif_fname'}" or return;
+	open LDIF, "$self->{'ldif_fname'}";
 	my @orig_ldif = <LDIF>;
 	close LDIF;
 
@@ -2056,7 +2056,7 @@ sub run_edit
 
 	# load changes into a new array for comparison
 	#
-	open LDIF, "$self->{'ldif_fname'}" or return;
+	open LDIF, "$self->{'ldif_fname'}";
 	my @new_ldif = <LDIF>;
 	close LDIF;
 
@@ -2754,7 +2754,7 @@ sub load_config
 	}
 	$confpath or return undef;
 
-	open YAML, $confpath or return undef;
+	open YAML, $confpath;
 	do {
 		local $/ = undef;
 		$data = <YAML>;  # slurp!
@@ -2794,6 +2794,15 @@ sub save_config
 
 	return 1;
 }
+
+sub slurp
+{
+	open my $fh, '<:encoding(UTF-8)', $_[0];
+	local $/;
+	my $ret = <$fh>;
+	close $fh;
+	return $ret;
+};
 
 ### EOF
 
