@@ -481,6 +481,14 @@ Remove each NAME from the list of defined aliases.
     unalias ll ls
     alias
 
+=head2 unsetenv
+
+Remove each NAME from the list of defined shelldap variables.
+
+    unset debug
+    unset configfile
+    unset myvar1 myvar2 myvar3
+
 =head2 whoami
 
 Print current bind DN.
@@ -626,7 +634,7 @@ sub init
 
 	$self->{'editor'} = $conf->{'editor'} || $ENV{'EDITOR'} || 'vi';
 	$self->{'pager'}  = $conf->{'pager'}  || $ENV{'PAGER'}  || 'less';
-	$self->{'env'}	  = [ qw/ debug cacheage timeout attributes / ];
+	$self->{'env'}	  = [ qw/ debug cacheage timeout attributes configfile / ];
 
 	# let autocomplete work with the '=' character
 	my $term = $self->term();
@@ -1531,20 +1539,23 @@ tie my %cmd_map, 'Tie::IxHash';
 	'mkdir'   => [ undef ],
 	'inspect' => [ undef, 'autocomplete_from_objectclasses_and_cwd' ],
 	'unalias' => [ undef ],
+	'unsetenv'=> [ undef ],
 
 	# Aliases:
-	'id'      => [ 'whoami' ],
-	'ls'      => [ 'list'  ],
-	'search'  => [ 'grep'  ],
-	'vi'      => [ 'edit'  ],
-	'rm'      => [ 'delete'],
-	'cp'      => [ 'copy'  ],
-	'read'    => [ 'read'  ],
-	'mv'      => [ 'move'  ],
-	'touch'   => [ 'create' ],
-	'export'  => [ 'setenv'],
-	'?'       => [ 'help' ],
-	'man'     => [ 'help' ],
+	'id'      => [ 'whoami'  ],
+	'ls'      => [ 'list'    ],
+	'search'  => [ 'grep'    ],
+	'vi'      => [ 'edit'    ],
+	'rm'      => [ 'delete'  ],
+	'cp'      => [ 'copy'    ],
+	'read'    => [ 'read'    ],
+	'mv'      => [ 'move'    ],
+	'touch'   => [ 'create'  ],
+	'export'  => [ 'setenv'  ],
+	'set'     => [ 'setenv'  ],
+	'?'       => [ 'help'    ],
+	'man'     => [ 'help'    ],
+	'unset'   => [ 'unsetenv'],
 );
 
 
@@ -1663,17 +1674,33 @@ sub run_configfile
 	my $action   = shift;
 	my $filepath = shift;
 
-	unless ( $action and $action =~ /^(?:load|save)$/) {
-		print "No action specified; use 'load' or 'save'.\n";
+	unless ( $action) {
+		if( $conf->{configfile} ) {
+			print qq{Current config file is '$conf->{configfile}'.\n}
+		} else {
+			print qq{Current config file is unset.\nDefault search locations:\n  ${\( join "\n  ", main::default_configfiles() )}\n}
+		}
+		return
+	}
+
+	unless( $action =~ /^(?:load|save)$/) {
+		print "Invalid action specified; use 'load' or 'save'.\n";
 		return;
 	}
 
+	# This too can result in $filepath being undef. In that case the defaults
+	# from load_config() / save_config() will apply.
+	$filepath ||= $conf->{configfile};
+
 	if( $action eq 'load') {
-		main::load_config($filepath);
-		print "Loaded.\n";
+		my($filepath, $more_conf) = main::load_config($filepath);
+		if( $more_conf) {
+			while ( my ($k, $v) = each %{$more_conf} ) { $conf->{ $k } = $v }
+		}
+		print "Config file '$filepath' loaded.\n";
 	} elsif( $action eq 'save') {
-		main::save_config($filepath);
-		print "Saved.\n";
+		$filepath = main::save_config($filepath);
+		print "Config file '$filepath' saved.\n";
 	}
 }
 
@@ -2087,7 +2114,7 @@ sub run_env
 {
 	my $self = shift;
 
-	print YAML::Syck::Dump( { map { $_, $conf->{$_}} sort @{ $self->{'env'}} } );
+	print YAML::Syck::Dump( { map { $conf->{$_} ? ($_, $conf->{$_}) : ()} sort @{ $self->{'env'}} } );
 	print "\n"
 }
 
@@ -2104,6 +2131,19 @@ sub run_setenv
 	$key = lc $key;
 
 	$conf->{$key} = $val;
+	return;
+}
+
+
+### Alter settings.
+###
+sub run_unsetenv
+{
+	my $self = shift;
+
+	for(@_) {
+		delete $conf->{$_}
+	}
 	return;
 }
 
@@ -2647,6 +2687,7 @@ sub findall_supers
 package main;
 use strict;
 use warnings;
+use Fatal qw/open/;
 
 $0 = 'shelldap';
 my $VERSION = '1.4.0';
@@ -2660,7 +2701,8 @@ Continuing, but shelldap is of limited usefulness without it.\n\n} if $@;
 
 # get config - rc file first, command line overrides
 use vars '$conf';
-$conf = load_config() || {};
+$conf = (load_config())[1];
+$conf ||= {};
 Getopt::Long::GetOptions(
 	$conf, 
 	'server|h|H=s',
@@ -2703,8 +2745,8 @@ if ( $conf->{'version'} ) {
 # additional/different config file?
 #
 if ( $conf->{'configfile'} ) {
-	my $more_conf = load_config( $conf->{'configfile'} );
-	while ( my ($k, $v) = each %{$conf} ) { $conf->{ $k } = $v }
+	my( $filepath, $more_conf) = load_config( $conf->{'configfile'} );
+	while ( my ($k, $v) = each %{$more_conf} ) { $conf->{ $k } = $v }
 }
 
 
@@ -2735,6 +2777,12 @@ POSIX::sigaction(&POSIX::SIGINT, $sigaction, $old_action); # save default one
 $shell->cmdloop();
 POSIX::sigaction(&POSIX::SIGINT, $old_action); # restore default one
 
+### List of default config files
+###
+sub default_configfiles
+{
+	( "$ENV{'HOME'}/.shelldap.rc", '/usr/local/etc/shelldap.conf', '/etc/shelldap.conf' )
+}
 
 ### load YAML config into global conf.
 ###
@@ -2744,11 +2792,7 @@ sub load_config
 	my ( $d, $data );
 
 	unless ( $confpath ) {
-		my @confs = (
-			"$ENV{'HOME'}/.shelldap.rc",
-			'/usr/local/etc/shelldap.conf',
-			'/etc/shelldap.conf',
-		);
+		my @confs = default_configfiles();
 		foreach ( @confs ) {
 			if ( -e $_ ) {
 				$confpath = $_;
@@ -2758,25 +2802,23 @@ sub load_config
 	}
 	$confpath or return undef;
 
-	open YAML, $confpath;
+	open(my($yaml) , "< $confpath");
 	do {
 		local $/ = undef;
-		$data = <YAML>;  # slurp!
+		$data = <$yaml>;  # slurp!
 	};
-	close YAML;
+	close $yaml;
 
-	eval { $conf = YAML::Syck::Load( $data ) };
+	my $conf2 = eval { YAML::Syck::Load( $data ) };
 	die "Invalid YAML in $confpath\n" if $@;
 
-	# remove reference to itself, if somehow it got dumped
-	# into YAML.
-	if( $conf->{configfile} and ($confpath eq $conf->{configfile})) {
-		delete $conf->{'configfile'}
+	if( $conf2->{'configfile'} and ($confpath eq $conf2->{'configfile'})) {
+		delete $conf2->{'configfile'}
 	}
 
-	$conf->{alias} ||= {};
+	$conf2->{alias} ||= {};
 
-	return $conf;
+	return($confpath, $conf2);
 }
 
 ### dump YAML config into conf file while making sure that
@@ -2785,18 +2827,18 @@ sub load_config
 ###
 sub save_config
 {
-	my $confpath = (shift) || "$ENV{'HOME'}/.shelldap.rc";
+	my $confpath = shift || $conf->{'configfile'} || (default_configfiles)[0];
 
+	my %conf2 = %$conf;
 	# This check is currently unnecessary because the comparison will always
 	# be true, but is left here for effect of least surprise in the future.
-	if( defined($conf->{'configfile'}) and ($confpath eq $conf->{'configfile'})) {
-		delete $conf->{'configfile'}
+	if( $conf->{configfile} and ($confpath eq $conf->{configfile})) {
+	 			 delete $conf2{'configfile'}
 	}
-
-	YAML::Syck::DumpFile( $confpath, $conf );
+	YAML::Syck::DumpFile( $confpath, \%conf2 );
 	chmod 0600, $confpath;
 
-	return 1;
+	return $confpath;
 }
 
 sub slurp
