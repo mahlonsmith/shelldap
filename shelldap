@@ -1596,18 +1596,19 @@ sub run_alias
 		unless( $cmd_args) {
 			print "alias: $alias: not found\n";
 		} else {
-			print "alias $alias=${\( join ', ', map {\"'$_'\"} @{$cmd_args})}\n";
+			print "alias $alias=${\( join ' ', map { $_=~ /\s/ ? \"'$_'\" : $_} @{$cmd_args})}\n";
 		}
 		return
 
 	# There is argument with =, so the line is a new alias definition
 	} else {
-		my($alias, $command) = ($cmd_alias =~ m/^(\S+?)[=\s]?(.*)$/);
+		my($alias, $alias2, $command) = ($cmd_alias =~ m/^([a-zA-Z0-9_-]+)$|^(\S+?)[\=\s]+(.+)$/);
+		$alias = $alias2 if $alias2;
 		unless( $alias) {
 			print "Invalid syntax.\n";
 			return
 		}
-		$command = $cmd_map{$command}[0] if $cmd_map{$command} and $cmd_map{$command}[0];
+		$command = $cmd_map{$command}[0] if $command and $cmd_map{$command} and $cmd_map{$command}[0];
 		$conf->{alias}{$alias} = [ $command ? $command : (), @_ ];
 	}
 }
