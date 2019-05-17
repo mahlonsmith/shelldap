@@ -2769,7 +2769,11 @@ my $sigset = POSIX::SigSet->new();
 sub ctrl_c_handler {
 	print "\n";
 	$shell->term->on_new_line;
-	$shell->term->replace_line('', 0);
+	$shell->term->kill_text;
+	$shell->term->callback_sigcleanup;
+	$shell->term->free_line_state;
+	$shell->term->cleanup_after_signal;
+	$shell->term->callback_handler_remove;
 	$shell->term->redisplay;
 }
 my $sigaction = POSIX::SigAction->new( \&ctrl_c_handler, $sigset, 0);
