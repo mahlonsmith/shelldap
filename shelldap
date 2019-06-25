@@ -239,8 +239,6 @@ Display the version number.
 
 =head1 SHELL COMMANDS
 
-=over 4
-
 =head2 alias
 
 Define or display aliases.
@@ -496,7 +494,6 @@ Print current bind DN.
 Show current auth credentials.  Unless you specified a binddn, this
 will just show an anonymous bind.
 
-=back
 
 =head1 TODO
 
