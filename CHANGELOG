@@ -1,3 +1,19 @@
+
+2019-06-26  v1.5.0
+
+	* Default display attributes can set as an option
+
+	* Support user specific aliases
+
+	* Manage configuration file from within the shell
+
+	* Improvements to 'ls -l' output
+
+	* Mirror command line flags with those of openldap tools
+
+	* Documentation improvements
+
+
 2017-06-07  v1.4.0
 
 	* Optionally support server side pagination controls.
