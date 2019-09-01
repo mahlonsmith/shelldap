@@ -91,7 +91,7 @@ You can also check out the source via [Mercurial](http://mercurial.selenic.com/w
 
 or via its [GitHub](https://github.com/) mirror at:
 
-    % gitclone https://github.com/mahlonsmith/shelldap.git
+    % git clone https://github.com/mahlonsmith/shelldap.git
 
 
 Documentation
