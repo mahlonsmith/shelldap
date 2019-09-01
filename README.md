@@ -89,9 +89,9 @@ You can also check out the source via [Mercurial](http://mercurial.selenic.com/w
 
     % hg clone http://code.martini.nu/shelldap/
 
-or via [BitBucket](http://bitbucket.org/) at:
+or via its [GitHub](https://github.com/) mirror at:
 
-    % hg clone https://bitbucket.org/mahlon/shelldap
+    % gitclone https://github.com/mahlonsmith/shelldap.git
 
 
 Documentation
