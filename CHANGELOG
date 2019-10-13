@@ -1,4 +1,9 @@
 
+2019-10-13  v1.5.1
+
+	* Repair SASL authentications, add a 'sasluser' option
+
+
 2019-06-26  v1.5.0
 
 	* Default display attributes can set as an option

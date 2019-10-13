@@ -2706,7 +2706,7 @@ use warnings;
 use Fatal qw/open/;
 
 $0 = 'shelldap';
-my $VERSION = '1.5.0';
+my $VERSION = '1.5.1';
 
 use Getopt::Long qw(:config no_ignore_case);
 use YAML::Syck qw//;
