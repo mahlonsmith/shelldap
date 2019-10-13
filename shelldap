@@ -166,7 +166,20 @@ credentials.
 A space separated list of SASL mechanisms.  Requires the Authen::SASL
 module.
 
-    --sasl 'PLAIN CRAM-MD5 GSSAPI'
+    --sasl 'PLAIN DIGEST-MD5 EXTERNAL GSSAPI'
+    -Y 'PLAIN DIGEST-MD5 EXTERNAL GSSAPI'
+
+=back
+
+=over 4
+
+=item B<sasluser>
+
+SASL authorization identity, if one is explicitly required by your
+backend mechanism.
+
+    --sasluser mahlon
+    -X mahlon
 
 =back
 
@@ -709,8 +722,8 @@ sub ldap
 You may try connecting insecurely, or install the module and try again.\n} if $@;
 	}
 
-	if ($conf->{'binddn'}) {
-		if($conf->{'promptpass'}) {
+	if ( $conf->{'binddn'} ) {
+		if ( $conf->{'promptpass'} ) {
 			# Prompt for a password after disabling local echo.
 			#
 			print "Bind password: ";
@@ -718,9 +731,11 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 			chomp( $conf->{'bindpass'} = <STDIN> );
 			Term::ReadKey::ReadMode 0;
 			print "\n";
-		} elsif($conf->{'pass'}) {
+		}
+		elsif ( $conf->{'pass'} ) {
 			$conf->{'bindpass'} = $conf->{'pass'}
-		} elsif($conf->{'passfile'}) {
+		}
+		elsif ( $conf->{'passfile'} ) {
 			chomp( $conf->{'bindpass'} = slurp($conf->{'passfile'}));
 		}
 	}
@@ -762,16 +777,20 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 	if ( $use_sasl ) {
 		my $serv = $conf->{'server'};
 		$serv =~ s!^ldap[si]?://!!;
-		$sasl = Authen::SASL->new( mechanism => $conf->{'sasl'} );
+		my $user = $1 if $conf->{'binddn'} && $conf->{'binddn'} =~ /uid=([^,]*),/i;
+		my $callback = {
+			pass => $conf->{'bindpass'},
+			user => $conf->{'sasluser'} || $user
+		};
+
+		$sasl = Authen::SASL->new( mechanism => $conf->{'sasl'}, callback => $callback );
 		$sasl_conn = $sasl->client_new( 'ldap', $serv );
 	}
 
 	# bind with sasl
 	#
 	if ( $sasl_conn ) {
-		$rv = $ldap->bind( $conf->{'binddn'},
-			sasl     => $sasl_conn
-		);
+		$rv = $ldap->bind( $conf->{'binddn'}, sasl => $sasl_conn );
 	}
 
 	# simple bind as an authenticated dn
@@ -785,7 +804,7 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 	# bind anonymously
 	#
 	else {
-		$rv = $sasl_conn ? $ldap->bind( sasl => $sasl_conn ) : $ldap->bind();
+		$rv = $ldap->bind();
 	}
 
 	my $err = $rv->error();
@@ -2715,9 +2734,10 @@ Getopt::Long::GetOptions(
 	'passfile|y=s',
 	'timeout=i',
 	'sasl|Y=s',
+	'sasluser|X=s',
 	'simple|x!' => sub {
 		my($opt,$arg) = @_;
-		$conf->{sasl} = $arg ? undef : 'PLAIN CRAM-MD5 GSSAPI'
+		$conf->{sasl} = $arg ? undef : 'PLAIN DIGEST-MD5 GSSAPI'
 	},
 	'tls_cacert=s',
 	'tls_cert=s',
@@ -2755,8 +2775,8 @@ $conf->{'attributes'} ||= ['*'];
 
 # Allow command line option --attributes to override settings from
 # config file.
-if($conf->{'cmdline_attributes'}) {
-	$conf->{'attributes'} = $conf->{'cmdline_attributes'}
+if ( $conf->{'cmdline_attributes'} ) {
+	$conf->{'attributes'} = $conf->{'cmdline_attributes'};
 }
 
 # create and enter shell loop while also handling Ctrl+C correctly.
@@ -2774,9 +2794,9 @@ sub ctrl_c_handler {
 }
 my $sigaction = POSIX::SigAction->new( \&ctrl_c_handler, $sigset, 0);
 my $old_action = POSIX::SigAction->new;
-POSIX::sigaction(&POSIX::SIGINT, $sigaction, $old_action); # save default one
+POSIX::sigaction( &POSIX::SIGINT, $sigaction, $old_action ); # save default one
 $shell->cmdloop();
-POSIX::sigaction(&POSIX::SIGINT, $old_action); # restore default one
+POSIX::sigaction( &POSIX::SIGINT, $old_action ); # restore default one
 
 ### List of default config files
 ###
@@ -2813,13 +2833,13 @@ sub load_config
 	my $conf2 = eval { YAML::Syck::Load( $data ) };
 	die "Invalid YAML in $confpath\n" if $@;
 
-	if( $conf2->{'configfile'} and ($confpath eq $conf2->{'configfile'})) {
-		delete $conf2->{'configfile'}
+	if ( $conf2->{'configfile'} and ($confpath eq $conf2->{'configfile'}) ) {
+		delete $conf2->{'configfile'};
 	}
 
 	$conf2->{alias} ||= {};
 
-	return($confpath, $conf2);
+	return( $confpath, $conf2 );
 }
 
 ### dump YAML config into conf file while making sure that
@@ -2833,8 +2853,8 @@ sub save_config
 	my %conf2 = %$conf;
 	# This check is currently unnecessary because the comparison will always
 	# be true, but is left here for effect of least surprise in the future.
-	if( $conf->{configfile} and ($confpath eq $conf->{configfile})) {
-	 			 delete $conf2{'configfile'}
+	if ( $conf->{configfile} and ($confpath eq $conf->{configfile}) ) {
+		delete $conf2{'configfile'};
 	}
 	YAML::Syck::DumpFile( $confpath, \%conf2 );
 	chmod 0600, $confpath;
