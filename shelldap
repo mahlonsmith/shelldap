@@ -770,7 +770,6 @@ You may try connecting insecurely, or install the module and try again.\n} if $@
 	#
 	if ( $sasl_conn ) {
 		$rv = $ldap->bind( $conf->{'binddn'},
-			password => $conf->{'bindpass'},
 			sasl     => $sasl_conn
 		);
 	}
