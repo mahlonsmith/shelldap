@@ -1485,6 +1485,7 @@ sub diff {
 				#
 				if ( $cur_valcount == 1 ) {
 					$e->replace( $attr => $val );
+					$seen_attr{ $attr }++;
 				}
 				else {
 
@@ -1509,10 +1510,6 @@ sub diff {
 			#
 			foreach ( $diff->Items(1) ) {
 				my ( $attr, $val ) = $parse->( $_ ) or next;
-				my $cur_vals = $e->get_value( $attr, asref => 1 ) || [];
-				my $cur_valcount = scalar @$cur_vals;
-
-				next if $cur_valcount == 1;
 				next if $seen_attr{ $attr };
 				$self->debug("DELETE: $_");
 				$e->delete( $attr => [ $val ] );
