@@ -51,7 +51,8 @@ ou=People,~ >
 Downloads
 ---------
 
-You can download the latest script [here](http://code.martini.nu/shelldap/archive/tip.zip).
+You can download the latest script
+[here](https://code.martini.nu/fossil/shelldap/tarball/tip/shelldap-tip.tar.gz).
 
 It is also available via the 
 [FreeBSD ports](http://www.freebsd.org/cgi/cvsweb.cgi/ports/net/shelldap/) system, OS X via 
@@ -85,9 +86,9 @@ Development
 -----------
 
 
-You can also check out the source via [Mercurial](http://mercurial.selenic.com/wiki/) from the following uri:
+You can also check out the source via [Fossil](http://fossil-scm.org/) from the following uri:
 
-    % hg clone http://code.martini.nu/shelldap/
+    % fossil clone https://code.martini.nu/fossil/shelldap
 
 or via its [GitHub](https://github.com/) mirror at:
 
@@ -98,3 +99,4 @@ Documentation
 -------------
 
 Once installed, Shelldap is fully documented via perldoc, and has a built-in `help` command as well.
+
