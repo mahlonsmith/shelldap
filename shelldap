@@ -236,6 +236,14 @@ Set the maximum time an LDAP operation can take before it is cancelled.
 
 =over 4
 
+=item B<diff>
+
+Print unified diff for changed entries.
+
+=back
+
+=over 4
+
 =item B<debug>
 
 Print extra operational info out, and backtrace on fatal error.
@@ -644,7 +652,7 @@ sub init
 
 	$self->{'editor'} = $conf->{'editor'} || $ENV{'EDITOR'} || 'vi';
 	$self->{'pager'}  = $conf->{'pager'}  || $ENV{'PAGER'}  || 'less';
-	$self->{'env'}	  = [ qw/ debug cacheage timeout attributes configfile / ];
+	$self->{'env'}	  = [ qw/ diff debug cacheage timeout attributes configfile / ];
 
 	# let autocomplete work with the '=' character
 	my $term = $self->term();
@@ -2116,6 +2124,26 @@ sub run_edit
 	}
 
 	unlink $self->{'ldif_fname'};
+
+	if ( $conf->{'diff'} ) {
+		my ( $fh_orig, $fname_orig ) =
+			File::Temp::tempfile( 'shelldap_XXXXXXXX', SUFFIX => '.ldif', TMPDIR => 1, UNLINK => 1 );
+		my ( $fh_new, $fname_new ) =
+			File::Temp::tempfile( 'shelldap_XXXXXXXX', SUFFIX => '.ldif', TMPDIR => 1, UNLINK => 1 );
+		print $fh_orig join('', @orig_ldif);
+		close $fh_orig;
+		print $fh_new join('', grep {!/^#/} @new_ldif); # exclude unused attributes
+		close $fh_new;
+		my $_diff = `diff --unified --show-function-line='^dn:' "$fname_orig" "$fname_new"`;
+		unlink $fname_orig;
+		unlink $fname_new;
+
+		# unified diff only allows 40 chars for function line! replace it with full dn
+		my @full_dn = map {s/\s*$//; $_} grep {/^dn:/} @new_ldif;
+		$_diff =~ s/^(@@ .*? @@ )dn:.*/$1$full_dn[0]/m;
+		print $_diff;
+	}
+
 	$self->{'edit_again'} = undef;
 	return;
 }
@@ -2740,6 +2768,7 @@ Getopt::Long::GetOptions(
 	'tls_cert=s',
 	'tls_key=s',
 	'tls|Z|ZZ!',
+	'diff|d',
 	'debug|v',
 	'version',
 	 help => sub {
