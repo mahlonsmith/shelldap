@@ -10,11 +10,11 @@ Witness!
 
 
 ```
-% shelldap 
+% shelldap
 ~ > [ tab ]
-~ > 
-cat     clear   cp      delete  env     grep    id      ls      move    passwd  read    search  touch   whoami  
-cd      copy    create  edit    exit    help    list    mkdir   mv      pwd     rm      setenv  vi      
+~ >
+cat     clear   cp      delete  env     grep    id      ls      move    passwd  read    search  touch   whoami
+cd      copy    create  edit    exit    help    list    mkdir   mv      pwd     rm      setenv  vi
 ~ > cd ou=People
 ou=People,~ > cat uid=ma[ tab ]
 ou=People,~ > cat uid=mahlon
@@ -44,7 +44,7 @@ uid: mahlon
 uidNumber: 20933
 userPassword: *
 
-ou=People,~ > 
+ou=People,~ >
 ```
 
 
@@ -54,10 +54,15 @@ Downloads
 You can download the latest script
 [here](https://code.martini.nu/fossil/shelldap/tarball/tip/shelldap-tip.tar.gz).
 
-It is also available via the 
-[FreeBSD ports](http://www.freebsd.org/cgi/cvsweb.cgi/ports/net/shelldap/) system, OS X via 
-[macports](https://trac.macports.org/browser/trunk/dports/net/shelldap/Portfile), Debian/Ubuntu via [apt](https://packages.debian.org/shelldap),
-NetBSD's [pkgsrc](ftp://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc/sysutils/shelldap/README.html), OpenBSD [ports](http://openports.se/sysutils/shelldap), openSUSE's [build service](http://software.opensuse.org/search?q=shelldap&baseproject=openSUSE%3AFactory&lang=en), and as a Fedora [RPM](https://src.fedoraproject.org/rpms/shelldap).
+It is also available via the
+[FreeBSD ports](https://ports.freebsd.org/cgi/ports.cgi?query=shelldap&stype=all&sektion=all) system,
+OS X via [macports](https://trac.macports.org/browser/trunk/dports/net/shelldap/Portfile),
+Debian/Ubuntu via [apt](https://packages.debian.org/shelldap),
+NetBSD's [pkgsrc](http://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/sysutils/shelldap/index.html),
+OpenBSD [ports](https://openports.pl/path/sysutils/shelldap),
+openSUSE's [build service](https://software.opensuse.org/package/shelldap?search_term=shelldap),
+Arch's User Repository [AUR](https://aur.archlinux.org/packages/shelldap),
+and as a Fedora [RPM](https://src.fedoraproject.org/rpms/shelldap).
 
 Many thanks to the maintainers of these packages.
 
@@ -71,7 +76,7 @@ Shelldap requires the following perl modules to function properly:
 
 * YAML::Syck
 * Term::Shell
-* Digest::MD5 
+* Digest::MD5
 * Net::LDAP
 * Algorithm::Diff
 
