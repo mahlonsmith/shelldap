@@ -1,4 +1,10 @@
 
+2024-12-29  v1.5.2
+
+	* Revert an LCS deletion edge case, allowing final attribute
+	  in a list of changes to be properly removed.
+
+
 2019-10-13  v1.5.1
 
 	* Repair SASL authentications, add a 'sasluser' option
@@ -66,7 +72,7 @@
 2014-06-21  v.1.1.0
 
 	* Add CONTRIBUTORS file.
-	
+
 	* Add simple (optional) SASL support.
 
 	* Fix the DN regexp to include dashes.
@@ -85,7 +91,7 @@
 
 2013-04-18  v1.0.1
 
-	* Fix for edge case Diff::LCS traversals. 
+	* Fix for edge case Diff::LCS traversals.
 	* Ensure re-edit state is cleared in between attempts.
 
 
