@@ -52,7 +52,7 @@ Downloads
 ---------
 
 You can download the latest script
-[here](https://code.martini.nu/fossil/shelldap/tarball/tip/shelldap-tip.tar.gz).
+[here](https://code.martini.nu/mahlon/shelldap/raw/branch/main/shelldap).
 
 It is also available via the
 [FreeBSD ports](https://ports.freebsd.org/cgi/ports.cgi?query=shelldap&stype=all&sektion=all) system,
@@ -90,18 +90,12 @@ Additional functionality is supported with the presence of:
 Development
 -----------
 
-
-You can also check out the source via [Fossil](http://fossil-scm.org/) from the following uri:
-
-    % fossil clone https://code.martini.nu/fossil/shelldap
-
-or via its [GitHub](https://github.com/) mirror at:
-
-    % git clone https://github.com/mahlonsmith/shelldap.git
+You can also check out the source via Git/Jujutsu from its [home
+repo](https://code.martini.nu/mahlon/shelldap), or its 
+[github mirror](https://github.com/mahlonsmith/shelldap.git).
 
 
 Documentation
 -------------
 
 Once installed, Shelldap is fully documented via perldoc, and has a built-in `help` command as well.
-
